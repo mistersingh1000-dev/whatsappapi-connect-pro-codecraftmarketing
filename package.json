@@ -1,0 +1,30 @@
+{
+  "name": "whatsapp-connect-pro",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Official WhatsApp Business API Provider website with Meta Embedded Signup, 7-day free trial, and Supabase accounts.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^15.5.18",
+    "react": "^19.2.2",
+    "react-dom": "^19.2.2",
+    "jose": "^5.9.6",
+    "bcryptjs": "^2.4.3",
+    "@supabase/supabase-js": "^2.45.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/bcryptjs": "^2.4.6",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  }
+}
