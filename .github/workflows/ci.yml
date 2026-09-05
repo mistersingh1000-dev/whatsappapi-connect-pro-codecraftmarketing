@@ -1,9 +1,6 @@
 name: CI Build
 
 on:
-  push:
-    branches:
-      - fix/production-whatsapp-onboarding
   pull_request:
     branches:
       - main
