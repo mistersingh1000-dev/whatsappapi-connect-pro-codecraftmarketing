@@ -28,6 +28,14 @@ export type Campaign = {
   lastError: string | null;
 };
 
+export type CampaignRecipientStatus =
+  | "queued"
+  | "processing"
+  | "sent"
+  | "failed"
+  | "delivered"
+  | "read";
+
 export type CampaignRecipient = {
   id: string;
   campaignId: string;
@@ -35,7 +43,7 @@ export type CampaignRecipient = {
   contactId: string;
   phone: string;
   contactName: string | null;
-  status: "queued" | "sent" | "failed" | "delivered" | "read";
+  status: CampaignRecipientStatus;
   waMessageId: string | null;
   error: string | null;
   createdAt: string;
@@ -73,6 +81,15 @@ export async function listCampaigns(db: Firestore, userId: string): Promise<Camp
   const rows = snap.docs.map((doc) => doc.data() as Campaign);
   rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return rows;
+}
+
+export async function listRunnableCampaigns(db: Firestore, limit = 20): Promise<Campaign[]> {
+  const snap = await db
+    .collection(CAMPAIGNS)
+    .where("status", "in", ["queued", "sending"])
+    .limit(Math.max(1, Math.min(limit, 50)))
+    .get();
+  return snap.docs.map((doc) => doc.data() as Campaign);
 }
 
 export async function getCampaign(
@@ -149,7 +166,9 @@ export async function seedCampaignRecipients(
   return written;
 }
 
-export async function nextQueuedRecipients(
+// Atomically claim queued recipients before sending. This prevents two
+// overlapping browser/cron invocations from sending the same recipient twice.
+export async function claimQueuedRecipients(
   db: Firestore,
   campaignId: string,
   limit = 25
@@ -160,7 +179,57 @@ export async function nextQueuedRecipients(
     .where("status", "==", "queued")
     .limit(Math.max(1, Math.min(limit, 50)))
     .get();
-  return snap.docs.map((doc) => doc.data() as CampaignRecipient);
+
+  const claimed: CampaignRecipient[] = [];
+  for (const doc of snap.docs) {
+    const claimedRow = await db.runTransaction(async (tx) => {
+      const current = await tx.get(doc.ref);
+      if (!current.exists) return null;
+      const row = current.data() as CampaignRecipient;
+      if (row.status !== "queued") return null;
+      const updatedAt = new Date().toISOString();
+      tx.update(doc.ref, { status: "processing", updatedAt });
+      return { ...row, status: "processing", updatedAt } as CampaignRecipient;
+    });
+    if (claimedRow) claimed.push(claimedRow);
+  }
+  return claimed;
+}
+
+// Requeue recipients left in processing if an invocation died before reaching
+// Meta. Only stale rows are touched, avoiding interference with active sends.
+export async function requeueStaleProcessingRecipients(
+  db: Firestore,
+  campaignId: string,
+  staleAfterMinutes = 10
+): Promise<number> {
+  const snap = await db
+    .collection(RECIPIENTS)
+    .where("campaignId", "==", campaignId)
+    .where("status", "==", "processing")
+    .get();
+  const cutoff = Date.now() - staleAfterMinutes * 60_000;
+  const stale = snap.docs.filter((doc) => {
+    const row = doc.data() as CampaignRecipient;
+    return new Date(row.updatedAt || 0).getTime() < cutoff;
+  });
+  if (!stale.length) return 0;
+  let batch = db.batch();
+  let count = 0;
+  for (const doc of stale) {
+    batch.update(doc.ref, {
+      status: "queued",
+      error: "Previous send attempt did not finish; safely requeued.",
+      updatedAt: new Date().toISOString(),
+    });
+    count += 1;
+    if (count % 400 === 0) {
+      await batch.commit();
+      batch = db.batch();
+    }
+  }
+  if (count % 400) await batch.commit();
+  return count;
 }
 
 export async function updateRecipient(
@@ -178,11 +247,12 @@ export async function refreshCampaignCounts(
   db: Firestore,
   campaignId: string
 ): Promise<Campaign | null> {
-  const [campaign, sent, failed, queued, delivered, read] = await Promise.all([
+  const [campaign, sent, failed, queued, processing, delivered, read] = await Promise.all([
     getCampaign(db, campaignId),
     db.collection(RECIPIENTS).where("campaignId", "==", campaignId).where("status", "==", "sent").count().get(),
     db.collection(RECIPIENTS).where("campaignId", "==", campaignId).where("status", "==", "failed").count().get(),
     db.collection(RECIPIENTS).where("campaignId", "==", campaignId).where("status", "==", "queued").count().get(),
+    db.collection(RECIPIENTS).where("campaignId", "==", campaignId).where("status", "==", "processing").count().get(),
     db.collection(RECIPIENTS).where("campaignId", "==", campaignId).where("status", "==", "delivered").count().get(),
     db.collection(RECIPIENTS).where("campaignId", "==", campaignId).where("status", "==", "read").count().get(),
   ]);
@@ -190,8 +260,8 @@ export async function refreshCampaignCounts(
 
   const sentCount = sent.data().count + delivered.data().count + read.data().count;
   const failedCount = failed.data().count;
-  const queuedCount = queued.data().count;
-  const status: CampaignStatus = queuedCount
+  const remaining = queued.data().count + processing.data().count;
+  const status: CampaignStatus = remaining
     ? "sending"
     : failedCount
       ? "completed_with_errors"
@@ -203,7 +273,7 @@ export async function refreshCampaignCounts(
     deliveredCount: delivered.data().count + read.data().count,
     readCount: read.data().count,
     status,
-    completedAt: queuedCount ? null : new Date().toISOString(),
+    completedAt: remaining ? null : new Date().toISOString(),
   });
 }
 
