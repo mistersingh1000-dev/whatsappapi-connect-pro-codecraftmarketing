@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
-import { getDb, updateUser } from "@/lib/db";
+import { getDb, findUser, updateUser } from "@/lib/db";
 import { encryptCredential } from "@/lib/credential-crypto";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,22 @@ export async function POST(req: Request) {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE_NAME)?.value);
   if (!session) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+
+  const db = getDb();
+  if (!db) {
+    return NextResponse.json(
+      { error: "database_not_configured", message: "The database is not configured on the server." },
+      { status: 503 }
+    );
+  }
+
+  const user = await findUser(db, session.sub);
+  if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+  const access = accessState(user);
+  if (!access.active) {
+    const denied = paidFeatureError(access);
+    return NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status });
+  }
 
   const { phone_number_id, waba_id, wa_token } = await req.json().catch(() => ({}));
   if (!phone_number_id || !wa_token) {
@@ -53,14 +70,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const db = getDb();
-  if (!db) {
-    return NextResponse.json(
-      { error: "database_not_configured", message: "The database is not configured on the server." },
-      { status: 503 }
-    );
-  }
-
   await updateUser(db, session.sub, {
     phone_number_id,
     waba_id: waba_id || null,
@@ -68,5 +77,5 @@ export async function POST(req: Request) {
     wa_registered: true,
   });
 
-  return NextResponse.json({ ok: true, phone_number_id, display });
+  return NextResponse.json({ ok: true, phone_number_id, display, trialAccess: user.plan === "trial" });
 }
