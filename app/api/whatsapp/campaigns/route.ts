@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
-import { decryptCredential } from "@/lib/credential-crypto";
 import { findUser, getDb } from "@/lib/db";
 import { createCampaign, listCampaigns } from "@/lib/marketing-db";
 import { accessState, paidFeatureError } from "@/lib/entitlements";
+import { whatsappApiToken } from "@/lib/whatsapp-auth";
 
 export const runtime = "nodejs";
 
@@ -56,13 +56,13 @@ export async function POST(req: Request) {
     const denied = paidFeatureError(access);
     return NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status });
   }
-  if (!user.waba_id || !user.phone_number_id || !user.wa_token || user.wa_registered === false) {
+  if (!user.waba_id || !user.phone_number_id || user.wa_registered === false) {
     return NextResponse.json(
       { error: "whatsapp_not_ready", message: "Connect and activate WhatsApp before creating campaigns." },
       { status: 409 }
     );
   }
-  const token = decryptCredential(user.wa_token);
+  const token = whatsappApiToken(user);
   if (!token) return NextResponse.json({ error: "credential_error" }, { status: 500 });
 
   const version = process.env.WHATSAPP_API_VERSION || "v26.0";
