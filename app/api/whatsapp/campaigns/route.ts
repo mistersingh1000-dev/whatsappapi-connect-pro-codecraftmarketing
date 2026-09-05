@@ -4,6 +4,7 @@ import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { decryptCredential } from "@/lib/credential-crypto";
 import { findUser, getDb } from "@/lib/db";
 import { createCampaign, listCampaigns } from "@/lib/marketing-db";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,12 @@ export async function GET() {
   if (!db) return NextResponse.json({ error: "database_not_configured" }, { status: 503 });
 
   try {
-    return NextResponse.json({ campaigns: await listCampaigns(db, session.sub) });
+    const user = await findUser(db, session.sub);
+    const access = user ? accessState(user) : null;
+    return NextResponse.json({
+      campaigns: await listCampaigns(db, session.sub),
+      readOnly: access ? access.readOnly : true,
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "failed" }, { status: 500 });
   }
@@ -44,7 +50,13 @@ export async function POST(req: Request) {
   }
 
   const user = await findUser(db, session.sub);
-  if (!user?.waba_id || !user?.phone_number_id || !user?.wa_token || user.wa_registered === false) {
+  if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+  const access = accessState(user);
+  if (!access.active) {
+    const denied = paidFeatureError(access);
+    return NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status });
+  }
+  if (!user.waba_id || !user.phone_number_id || !user.wa_token || user.wa_registered === false) {
     return NextResponse.json(
       { error: "whatsapp_not_ready", message: "Connect and activate WhatsApp before creating campaigns." },
       { status: 409 }
@@ -53,8 +65,6 @@ export async function POST(req: Request) {
   const token = decryptCredential(user.wa_token);
   if (!token) return NextResponse.json({ error: "credential_error" }, { status: 500 });
 
-  // Never trust the browser's template list. Re-check with Meta that this exact
-  // name/language is currently APPROVED before creating a bulk campaign.
   const version = process.env.WHATSAPP_API_VERSION || "v26.0";
   try {
     const params = new URLSearchParams({
