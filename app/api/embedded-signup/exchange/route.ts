@@ -2,9 +2,10 @@ import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
-import { getDb, updateUser } from "@/lib/db";
+import { getDb, findUser, updateUser } from "@/lib/db";
 import { encryptCredential } from "@/lib/credential-crypto";
 import { provisionProviderAccess, providerModeEnabled } from "@/lib/meta-provider";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,22 @@ export async function POST(req: Request) {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE_NAME)?.value);
   if (!session) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+
+  const db = getDb();
+  if (!db) {
+    return NextResponse.json(
+      { error: "database_not_configured", message: "Firebase is not configured on the server." },
+      { status: 503 }
+    );
+  }
+
+  const user = await findUser(db, session.sub);
+  if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+  const access = accessState(user);
+  if (!access.active) {
+    const denied = paidFeatureError(access);
+    return NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status });
+  }
 
   const { code, waba_id, phone_number_id } = await req.json().catch(() => ({}));
   if (!code || !waba_id || !phone_number_id) {
@@ -31,14 +48,6 @@ export async function POST(req: Request) {
   if (!appId || !appSecret) {
     return NextResponse.json(
       { error: "meta_not_configured", message: "Meta Embedded Signup is not configured on the server." },
-      { status: 503 }
-    );
-  }
-
-  const db = getDb();
-  if (!db) {
-    return NextResponse.json(
-      { error: "database_not_configured", message: "Firebase is not configured on the server." },
       { status: 503 }
     );
   }
@@ -85,9 +94,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // In Tech Provider mode, complete the provider-side WABA assignment and,
-  // when explicitly enabled, provider credit-line attachment before we mark
-  // the onboarding as successful. Basic/manual mode does not require this.
   const provider = await provisionProviderAccess(String(waba_id));
   if (providerModeEnabled() && provider.errors.length) {
     return NextResponse.json(
@@ -165,6 +171,8 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: true,
         registered: true,
+        trialAccess: user.plan === "trial",
+        accessEndsAt: user.trial_ends_at,
         waba_id: String(waba_id),
         phone_number_id: String(phone_number_id),
         display_phone_number: phoneDetails?.display_phone_number || null,
@@ -190,6 +198,8 @@ export async function POST(req: Request) {
         ok: true,
         registered: false,
         needsRegistration: true,
+        trialAccess: user.plan === "trial",
+        accessEndsAt: user.trial_ends_at,
         message,
         waba_id: String(waba_id),
         phone_number_id: String(phone_number_id),
@@ -214,6 +224,8 @@ export async function POST(req: Request) {
         ok: true,
         registered: false,
         needsRegistration: true,
+        trialAccess: user.plan === "trial",
+        accessEndsAt: user.trial_ends_at,
         message,
         waba_id: String(waba_id),
         phone_number_id: String(phone_number_id),
