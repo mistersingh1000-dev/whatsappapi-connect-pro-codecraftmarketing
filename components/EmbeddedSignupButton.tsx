@@ -48,12 +48,21 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
       if (!res.ok) {
         setStatus(
           data?.message ||
-            "Meta completed signup, but the final API provisioning step failed. Please try again."
+            "Meta completed signup, but the API provisioning step failed. Please check the Meta configuration and try again."
         );
         return;
       }
 
-      setStatus("Connected ✓ Your WhatsApp number is linked and webhook delivery is enabled.");
+      if (data?.registered === true) {
+        setStatus("Connected ✓ Meta signup, webhook subscription and phone registration are complete.");
+      } else if (data?.needsRegistration) {
+        setStatus(
+          data?.message ||
+            "Meta signup is complete, but final phone activation is still pending. Your dashboard will show the current status."
+        );
+      } else {
+        setStatus("Meta signup completed. Checking activation status in your dashboard…");
+      }
       onConnected?.();
     } catch {
       setStatus("Could not reach the server to finish setup. Please try again.");
@@ -86,9 +95,6 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
     }
 
     const onMessage = (event: MessageEvent) => {
-      // Meta's Embedded Signup browser events originate from facebook.com.
-      // Do not use endsWith("facebook.com"), because attacker-controlled hosts
-      // such as notfacebook.com would also pass that check.
       if (event.origin !== "https://www.facebook.com") return;
 
       try {
@@ -145,8 +151,6 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
         auth_type: "rerequest",
         response_type: "code",
         override_default_response_type: true,
-        // Embedded Signup v4 is defined by the Facebook Login for Business
-        // configuration. Do not send legacy sessionInfoVersion values here.
         extras: { setup: {} },
       }
     );
@@ -156,10 +160,10 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
     <div className="card p-6 sm:p-8">
       <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="font-display text-lg font-semibold">Apply for WhatsApp API</h3>
+          <h3 className="font-display text-lg font-semibold">Connect with Meta</h3>
           <p className="muted mt-1 text-sm">
-            One Meta popup connects the customer's Business Portfolio, WhatsApp Business Account
-            and phone number to your platform.
+            The Meta-hosted flow lets the customer choose the correct Business Portfolio,
+            WhatsApp Business Account and phone number without copying API credentials.
           </p>
         </div>
         <button
@@ -184,8 +188,8 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
           <p className="text-sm font-semibold text-amber-300">One-click signup needs Meta setup</p>
           <p className="muted mt-1.5 text-sm leading-relaxed">
             Add NEXT_PUBLIC_META_APP_ID and NEXT_PUBLIC_META_CONFIG_ID in Vercel after creating the
-            Embedded Signup v4 configuration in Meta. The manual API connection can still be used
-            while Meta App Review is pending.
+            Facebook Login for Business / Embedded Signup configuration. Manual Cloud API
+            credentials can still be connected while Meta App Review is pending.
           </p>
         </div>
       )}
