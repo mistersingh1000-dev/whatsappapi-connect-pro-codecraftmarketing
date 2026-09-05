@@ -1,6 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
 import { decryptCredential } from "@/lib/credential-crypto";
 import { findUser } from "@/lib/db";
+import { accessState } from "@/lib/entitlements";
 import {
   getCampaign,
   nextQueuedRecipients,
@@ -78,7 +79,9 @@ export async function processCampaignBatch(
   }
 
   const user = await findUser(db, userId);
-  if (!user?.phone_number_id || !user?.wa_token || user.wa_registered === false) {
+  if (!user) throw new Error("user_not_found");
+  if (!accessState(user).active) throw new Error("access_expired");
+  if (!user.phone_number_id || !user.wa_token || user.wa_registered === false) {
     throw new Error("whatsapp_not_ready");
   }
   const token = decryptCredential(user.wa_token);
@@ -89,8 +92,6 @@ export async function processCampaignBatch(
 
   await updateCampaign(db, campaignId, { status: "sending" });
 
-  // Small concurrency groups reduce server time without firing an uncontrolled
-  // burst at Meta. Campaign recipients are already restricted to explicit opt-in.
   for (let i = 0; i < recipients.length; i += 5) {
     const group = recipients.slice(i, i + 5);
     await Promise.all(
