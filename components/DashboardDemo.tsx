@@ -16,11 +16,25 @@ const actions: Array<{
     cta: "Open inbox",
   },
   {
-    title: "Contacts",
-    desc: "View and organize the contacts stored for your account.",
+    title: "Contacts & consent",
+    desc: "Manage customer records, marketing opt-in and Do Not Message status.",
     href: "/dashboard/contacts",
     icon: "link",
-    cta: "View contacts",
+    cta: "Manage contacts",
+  },
+  {
+    title: "WhatsApp templates",
+    desc: "Sync approved Meta templates and submit simple Marketing or Utility templates for review.",
+    href: "/dashboard/templates",
+    icon: "report",
+    cta: "Open templates",
+  },
+  {
+    title: "Broadcast campaigns",
+    desc: "Send approved template campaigns only to contacts with recorded marketing consent.",
+    href: "/dashboard/campaigns",
+    icon: "rocket",
+    cta: "Open campaigns",
   },
   {
     title: "Analytics",
@@ -42,8 +56,9 @@ const checklist = [
   "Create and verify your platform account",
   "Connect the correct Meta Business Portfolio, WABA and phone number",
   "Confirm the dashboard shows WhatsApp as Connected, not Activation Pending",
-  "Use approved templates when a business-initiated message requires one",
-  "Collect customer opt-in and follow Meta messaging policies before campaigns",
+  "Sync at least one Meta-approved template",
+  "Record customer marketing opt-in before adding them to a campaign",
+  "Respect opt-outs and WhatsApp messaging policies",
 ];
 
 export default function DashboardDemo() {
@@ -56,7 +71,7 @@ export default function DashboardDemo() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {actions.map((item) => {
           const Glyph = Icon[item.icon];
           return (
@@ -90,8 +105,7 @@ export default function DashboardDemo() {
           <div className="min-w-0">
             <h3 className="font-display text-base font-semibold">Before sending to customers</h3>
             <p className="muted mt-1 text-sm leading-relaxed">
-              Complete this launch checklist for each customer account. Meta approval and messaging
-              eligibility can differ by business and phone number.
+              Complete this launch checklist for each customer account. Meta approval and messaging eligibility can differ by business and phone number.
             </p>
           </div>
         </div>
