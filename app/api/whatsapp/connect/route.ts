@@ -65,6 +65,7 @@ export async function POST(req: Request) {
     phone_number_id,
     waba_id: waba_id || null,
     wa_token: encryptCredential(wa_token),
+    wa_registered: true,
   });
 
   return NextResponse.json({ ok: true, phone_number_id, display });
