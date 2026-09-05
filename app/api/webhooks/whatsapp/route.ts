@@ -13,6 +13,8 @@ import {
   updateCampaignRecipientByWaMessageId,
   refreshCampaignCounts,
 } from "@/lib/marketing-db";
+import { runInboundAutomations } from "@/lib/automation-engine";
+import { whatsappMessageAlreadyProcessed } from "@/lib/webhook-idempotency";
 
 export const runtime = "nodejs";
 
@@ -107,6 +109,10 @@ export async function POST(req: Request) {
           const from = msg?.from;
           if (!from) continue;
 
+          // Meta may retry webhook deliveries. Never create duplicate CRM
+          // messages or fire the same automation twice for the same WA message.
+          if (await whatsappMessageAlreadyProcessed(db, msg?.id)) continue;
+
           const text =
             msg?.text?.body ||
             msg?.button?.text ||
@@ -115,20 +121,21 @@ export async function POST(req: Request) {
             `[${msg?.type || "unsupported"} message]`;
           const profileName = value?.contacts?.[0]?.profile?.name || null;
 
-          // Every inbound conversation gets a CRM contact, but an inbound
-          // message does not automatically grant permission for future marketing.
           const contact = await createContact(db, userId, from, profileName, {
             source: "inbound-whatsapp",
             lastMessageTime: new Date().toISOString(),
           });
 
-          if (isOptOut(text)) {
+          const optedOut = isOptOut(text);
+          if (optedOut) {
             await updateContactForUser(db, userId, contact.id, {
               marketingOptIn: false,
               optInAt: null,
               optInSource: null,
               doNotMessage: true,
             });
+            contact.marketingOptIn = false;
+            contact.doNotMessage = true;
           }
 
           const id = convId(userId, from);
@@ -146,6 +153,18 @@ export async function POST(req: Request) {
           }
 
           await addMessage(db, userId, id, "contact", text, msg?.id || null);
+
+          if (!optedOut) {
+            // Automation failures must not make Meta retry the whole webhook;
+            // log them and keep the inbound message safely stored.
+            await runInboundAutomations({
+              db,
+              owner,
+              contact,
+              conversationId: id,
+              inboundText: text,
+            }).catch((e) => console.error("Automation error:", e?.message || e));
+          }
         }
       }
     }
