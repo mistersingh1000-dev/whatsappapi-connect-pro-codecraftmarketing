@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./Icons";
 
 declare global {
@@ -11,69 +12,142 @@ declare global {
 
 const APP_ID = process.env.NEXT_PUBLIC_META_APP_ID || "YOUR_META_APP_ID";
 const CONFIG_ID = process.env.NEXT_PUBLIC_META_CONFIG_ID || "YOUR_CONFIG_ID";
+const GRAPH_VERSION = process.env.NEXT_PUBLIC_META_GRAPH_VERSION || "v26.0";
 
 export default function EmbeddedSignupButton({ onConnected }: { onConnected?: () => void }) {
   const [status, setStatus] = useState<string>("");
-  const [signup, setSignup] = useState<{ waba_id?: string; phone_number_id?: string }>({});
-  const ready = APP_ID !== "YOUR_META_APP_ID";
+  const codeRef = useRef<string | null>(null);
+  const signupRef = useRef<{ waba_id?: string; phone_number_id?: string }>({});
+  const submittingRef = useRef(false);
+
+  const ready =
+    APP_ID !== "YOUR_META_APP_ID" &&
+    CONFIG_ID !== "YOUR_CONFIG_ID" &&
+    Boolean(APP_ID) &&
+    Boolean(CONFIG_ID);
+
+  const saveIfReady = useCallback(async () => {
+    const code = codeRef.current;
+    const { waba_id, phone_number_id } = signupRef.current;
+
+    // Meta returns the authorization code and WA_EMBEDDED_SIGNUP FINISH event
+    // independently. Wait until both have arrived before calling the backend.
+    if (!code || !waba_id || !phone_number_id || submittingRef.current) return;
+
+    submittingRef.current = true;
+    setStatus("Finishing your WhatsApp connection…");
+
+    try {
+      const res = await fetch("/api/embedded-signup/exchange", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, waba_id, phone_number_id }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setStatus(
+          data?.message ||
+            "Meta completed signup, but the final API provisioning step failed. Please try again."
+        );
+        return;
+      }
+
+      setStatus("Connected ✓ Your WhatsApp number is linked and webhook delivery is enabled.");
+      onConnected?.();
+    } catch {
+      setStatus("Could not reach the server to finish setup. Please try again.");
+    } finally {
+      submittingRef.current = false;
+    }
+  }, [onConnected]);
 
   useEffect(() => {
-    if (!ready || window.FB) return;
+    if (!ready) return;
+
     window.fbAsyncInit = function () {
-      window.FB.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: false, version: "v21.0" });
+      window.FB?.init({
+        appId: APP_ID,
+        autoLogAppEvents: true,
+        xfbml: false,
+        version: GRAPH_VERSION,
+      });
     };
-    const s = document.createElement("script");
-    s.src = "https://connect.facebook.net/en_US/sdk.js";
-    s.async = true;
-    s.defer = true;
-    document.body.appendChild(s);
+
+    if (!window.FB && !document.getElementById("facebook-jssdk")) {
+      const s = document.createElement("script");
+      s.id = "facebook-jssdk";
+      s.src = "https://connect.facebook.net/en_US/sdk.js";
+      s.async = true;
+      s.defer = true;
+      document.body.appendChild(s);
+    } else if (window.FB) {
+      window.fbAsyncInit?.();
+    }
 
     const onMessage = (event: MessageEvent) => {
-      if (!event.origin.endsWith("facebook.com")) return;
+      // Meta's Embedded Signup browser events originate from facebook.com.
+      // Do not use endsWith("facebook.com"), because attacker-controlled hosts
+      // such as notfacebook.com would also pass that check.
+      if (event.origin !== "https://www.facebook.com") return;
+
       try {
-        const data = JSON.parse(event.data);
-        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH") {
-          setSignup({ waba_id: data.data?.waba_id, phone_number_id: data.data?.phone_number_id });
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.type !== "WA_EMBEDDED_SIGNUP") return;
+
+        if (data?.event === "FINISH") {
+          const waba_id = data?.data?.waba_id;
+          const phone_number_id = data?.data?.phone_number_id;
+          if (waba_id && phone_number_id) {
+            signupRef.current = { waba_id, phone_number_id };
+            void saveIfReady();
+          } else {
+            setStatus("Meta finished signup but did not return the WhatsApp account IDs. Please retry.");
+          }
+        } else if (data?.event === "CANCEL") {
+          setStatus("Signup was cancelled before completion.");
+        } else if (data?.event === "ERROR") {
+          setStatus(data?.data?.error_message || "Meta reported an Embedded Signup error.");
         }
-      } catch {}
+      } catch {
+        // Ignore unrelated postMessage traffic.
+      }
     };
+
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [ready]);
-
-  const save = async (code: string | null) => {
-    const res = await fetch("/api/embedded-signup/exchange", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, ...signup }),
-    });
-    if (res.ok) {
-      setStatus("Connected ✓ Your WhatsApp number is now linked to your account.");
-      onConnected?.();
-    } else {
-      const d = await res.json().catch(() => ({}));
-      setStatus(d.message || "Could not save your number. Please try again.");
-    }
-  };
+  }, [ready, saveIfReady]);
 
   const launch = () => {
     if (!ready || !window.FB) {
-      setStatus("One-click signup is not switched on yet. Please use the manual setup steps above to connect your number.");
+      setStatus(
+        "One-click signup is not configured yet. Add the Meta App ID and Embedded Signup Configuration ID in Vercel."
+      );
       return;
     }
+
+    codeRef.current = null;
+    signupRef.current = {};
+    submittingRef.current = false;
+    setStatus("Opening Meta Embedded Signup…");
+
     window.FB.login(
       (response: any) => {
-        if (response.authResponse?.code) {
-          save(response.authResponse.code);
+        if (response?.authResponse?.code) {
+          codeRef.current = response.authResponse.code;
+          void saveIfReady();
         } else {
-          setStatus("Signup was cancelled.");
+          setStatus("Signup was cancelled or Meta did not return an authorization code.");
         }
       },
       {
         config_id: CONFIG_ID,
+        auth_type: "rerequest",
         response_type: "code",
         override_default_response_type: true,
-        extras: { setup: {}, featureType: "", sessionInfoVersion: "2" },
+        // Embedded Signup v4 is defined by the Facebook Login for Business
+        // configuration. Do not send legacy sessionInfoVersion values here.
+        extras: { setup: {} },
       }
     );
   };
@@ -84,34 +158,34 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
         <div>
           <h3 className="font-display text-lg font-semibold">Apply for WhatsApp API</h3>
           <p className="muted mt-1 text-sm">
-            One popup connects your Facebook Business, verifies your number, and activates the
-            official API — directly with Meta.
+            One Meta popup connects the customer's Business Portfolio, WhatsApp Business Account
+            and phone number to your platform.
           </p>
         </div>
         <button
           onClick={launch}
           disabled={!ready}
-          title={ready ? undefined : "One-click signup is not available yet"}
+          title={ready ? undefined : "Meta Embedded Signup is not configured yet"}
           className="btn-primary shrink-0 bg-[#1877F2] bg-none text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Icon.facebook className="h-5 w-5" />
           Continue with Facebook
         </button>
       </div>
+
       {status && (
         <div className="mt-5 rounded-2xl border border-emerald/30 bg-emerald/[0.06] px-4 py-3 text-sm">
           {status}
         </div>
       )}
+
       {!ready && (
         <div className="mt-5 rounded-2xl border border-amber-500/40 bg-amber-500/[0.07] px-4 py-3">
-          <p className="text-sm font-semibold text-amber-300">
-            One-click signup is not available yet
-          </p>
+          <p className="text-sm font-semibold text-amber-300">One-click signup needs Meta setup</p>
           <p className="muted mt-1.5 text-sm leading-relaxed">
-            We are completing our approval with Meta, which is what switches this button on. It
-            does not stop you going live today — use the manual setup above to connect your
-            number. It takes about ten minutes and gives you the same official WhatsApp API.
+            Add NEXT_PUBLIC_META_APP_ID and NEXT_PUBLIC_META_CONFIG_ID in Vercel after creating the
+            Embedded Signup v4 configuration in Meta. The manual API connection can still be used
+            while Meta App Review is pending.
           </p>
         </div>
       )}
