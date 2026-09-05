@@ -2,7 +2,8 @@ import type { Firestore } from "firebase-admin/firestore";
 import type { AppUser } from "@/lib/db";
 import type { Contact } from "@/lib/chat-db";
 import { addMessage, updateContactForUser } from "@/lib/chat-db";
-import { decryptCredential } from "@/lib/credential-crypto";
+import { accessState } from "@/lib/entitlements";
+import { whatsappApiToken } from "@/lib/whatsapp-auth";
 import {
   listEnabledAutomationRules,
   markAutomationRun,
@@ -29,7 +30,7 @@ async function sendRuleReply(args: {
   contact: Contact;
   rule: AutomationRule;
 }) {
-  const token = decryptCredential(args.owner.wa_token);
+  const token = whatsappApiToken(args.owner);
   if (!token || !args.owner.phone_number_id || args.owner.wa_registered === false) {
     throw new Error("whatsapp_not_ready");
   }
@@ -88,7 +89,8 @@ export async function runInboundAutomations(args: {
   conversationId: string;
   inboundText: string;
 }) {
-  if (args.contact.doNotMessage === true) return { matched: 0, sent: 0 };
+  if (!accessState(args.owner).active) return { matched: 0, sent: 0, blocked: "access_expired" };
+  if (args.contact.doNotMessage === true) return { matched: 0, sent: 0, blocked: "do_not_message" };
 
   const rules = await listEnabledAutomationRules(args.db, args.owner.email);
   const matching = rules.filter((rule) => matches(rule, args.inboundText));
@@ -98,7 +100,6 @@ export async function runInboundAutomations(args: {
   // avoids multiple bots replying to one customer message. More complex flow
   // branching can be layered on top of this engine later.
   const rule = matching[0];
-  let sent = 0;
 
   if (rule.addTags.length) {
     const tags = Array.from(new Set([...(args.contact.tags || []), ...rule.addTags])).slice(0, 25);
@@ -115,7 +116,6 @@ export async function runInboundAutomations(args: {
     reply.waMessageId
   );
   await markAutomationRun(args.db, rule);
-  sent = 1;
 
-  return { matched: matching.length, sent, ruleId: rule.id };
+  return { matched: matching.length, sent: 1, ruleId: rule.id };
 }
