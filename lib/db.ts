@@ -14,9 +14,12 @@ export type AppUser = {
   waba_id: string | null;
   phone_number_id: string | null;
   wa_token: string | null;
-  // Embedded Signup stores false after token exchange and flips to true after
-  // the Cloud API /register step succeeds. Optional for older user documents.
+  // Embedded Signup activation state. Optional for older user documents.
   wa_registered?: boolean;
+  // Server-generated Cloud API two-step registration PIN, encrypted at rest.
+  wa_registration_pin?: string | null;
+  wa_registration_error?: string | null;
+  wa_connected_at?: string | null;
   created_at: string; // ISO
 };
 
