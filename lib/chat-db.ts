@@ -8,6 +8,16 @@ export type Contact = {
   name: string | null;
   profileImage: string | null;
   lastMessageTime: string;
+  email?: string | null;
+  company?: string | null;
+  city?: string | null;
+  source?: string | null;
+  tags?: string[];
+  marketingOptIn?: boolean;
+  optInSource?: string | null;
+  optInAt?: string | null;
+  doNotMessage?: boolean;
+  createdAt?: string;
 };
 
 export type Message = {
@@ -39,8 +49,6 @@ const CONVERSATIONS = "conversations";
 const MESSAGES = "messages";
 const CONTACTS = "contacts";
 
-// Firestore document ids may not contain "/". Emails and phones are safe once
-// we strip that, but we normalise here so ids are always predictable.
 export function convId(userId: string, contactPhone: string): string {
   return `${userId}_${contactPhone}`.replace(/\//g, "_");
 }
@@ -81,8 +89,6 @@ export async function getConversation(
 }
 
 export async function listConversations(db: Firestore, userId: string): Promise<Conversation[]> {
-  // No orderBy here: a composite index would be required, and a missing index
-  // makes the whole inbox 500. Sorting in memory is fine at this scale.
   const snap = await db.collection(CONVERSATIONS).where("userId", "==", userId).get();
   const rows = snap.docs.map((d) => d.data() as Conversation);
   rows.sort((a, b) => (b.lastMessageTime || "").localeCompare(a.lastMessageTime || ""));
@@ -166,21 +172,59 @@ export async function createContact(
   db: Firestore,
   userId: string,
   phone: string,
-  name: string | null = null
+  name: string | null = null,
+  extras: Partial<Omit<Contact, "id" | "userId" | "phone" | "name">> = {}
 ): Promise<Contact> {
   const id = `${userId}_${phone}`.replace(/\//g, "_");
+  const ref = db.collection(CONTACTS).doc(id);
+  const before = await ref.get();
+  const previous = before.exists ? (before.data() as Contact) : null;
+  const now = new Date().toISOString();
+
   const contact: Contact = {
     id,
     userId,
     phone,
-    name,
-    profileImage: null,
-    lastMessageTime: new Date().toISOString(),
+    name: name ?? previous?.name ?? null,
+    profileImage: previous?.profileImage ?? null,
+    lastMessageTime: extras.lastMessageTime || previous?.lastMessageTime || now,
+    email: extras.email ?? previous?.email ?? null,
+    company: extras.company ?? previous?.company ?? null,
+    city: extras.city ?? previous?.city ?? null,
+    source: extras.source ?? previous?.source ?? "manual",
+    tags: extras.tags ?? previous?.tags ?? [],
+    marketingOptIn: extras.marketingOptIn ?? previous?.marketingOptIn ?? false,
+    optInSource: extras.optInSource ?? previous?.optInSource ?? null,
+    optInAt: extras.optInAt ?? previous?.optInAt ?? null,
+    doNotMessage: extras.doNotMessage ?? previous?.doNotMessage ?? false,
+    createdAt: previous?.createdAt || now,
   };
-  await db.collection(CONTACTS).doc(id).set(contact, { merge: true });
+  await ref.set(contact, { merge: true });
   return contact;
 }
 
+export async function getContact(db: Firestore, contactId: string): Promise<Contact | null> {
+  const snap = await db.collection(CONTACTS).doc(contactId).get();
+  return snap.exists ? (snap.data() as Contact) : null;
+}
+
+export async function updateContactForUser(
+  db: Firestore,
+  userId: string,
+  contactId: string,
+  updates: Partial<Omit<Contact, "id" | "userId" | "phone" | "createdAt">>
+): Promise<Contact | null> {
+  const ref = db.collection(CONTACTS).doc(contactId);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const current = snap.data() as Contact;
+  if (current.userId !== userId) return null;
+  await ref.update(updates);
+  const after = await ref.get();
+  return after.data() as Contact;
+}
+
+// Legacy internal helper. Prefer updateContactForUser from API routes.
 export async function updateContact(
   db: Firestore,
   contactId: string,
@@ -203,6 +247,14 @@ export async function listContacts(db: Firestore, userId: string): Promise<Conta
   const rows = snap.docs.map((d) => d.data() as Contact);
   rows.sort((a, b) => (b.lastMessageTime || "").localeCompare(a.lastMessageTime || ""));
   return rows;
+}
+
+export async function listMarketingOptedInContacts(
+  db: Firestore,
+  userId: string
+): Promise<Contact[]> {
+  const contacts = await listContacts(db, userId);
+  return contacts.filter((c) => c.marketingOptIn === true && c.doNotMessage !== true);
 }
 
 export async function getStats(
@@ -235,7 +287,6 @@ export async function getStats(
   };
 }
 
-// Admin-only: every conversation across all customers.
 export async function listAllConversations(db: Firestore): Promise<Conversation[]> {
   const snap = await db.collection(CONVERSATIONS).get();
   const rows = snap.docs.map((d) => d.data() as Conversation);
