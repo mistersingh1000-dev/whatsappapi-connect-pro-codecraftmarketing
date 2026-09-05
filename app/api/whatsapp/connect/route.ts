@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, updateUser } from "@/lib/db";
+import { encryptCredential } from "@/lib/credential-crypto";
 
 export const runtime = "nodejs";
 
@@ -18,18 +19,29 @@ export async function POST(req: Request) {
     );
   }
 
-  const VERSION = process.env.WHATSAPP_API_VERSION || "v21.0";
+  const VERSION = process.env.WHATSAPP_API_VERSION || "v26.0";
 
   let display = "";
   try {
     const r = await fetch(
-      `https://graph.facebook.com/${VERSION}/${phone_number_id}?fields=display_phone_number,verified_name`,
-      { headers: { Authorization: `Bearer ${wa_token}` } }
+      `https://graph.facebook.com/${VERSION}/${encodeURIComponent(phone_number_id)}?fields=id,display_phone_number,verified_name`,
+      { headers: { Authorization: `Bearer ${wa_token}` }, cache: "no-store" }
     );
-    const info = await r.json();
+    const info = await r.json().catch(() => ({}));
     if (!r.ok) {
       return NextResponse.json(
-        { error: "invalid", message: info?.error?.message || "Meta rejected these credentials. Double-check the Phone Number ID and token." },
+        {
+          error: "invalid",
+          message:
+            info?.error?.message ||
+            "Meta rejected these credentials. Double-check the Phone Number ID and token.",
+        },
+        { status: 400 }
+      );
+    }
+    if (String(info?.id || "") !== String(phone_number_id)) {
+      return NextResponse.json(
+        { error: "phone_mismatch", message: "The token does not belong to this Phone Number ID." },
         { status: 400 }
       );
     }
@@ -42,9 +54,18 @@ export async function POST(req: Request) {
   }
 
   const db = getDb();
-  if (db) {
-    await updateUser(db, session.sub, { phone_number_id, waba_id: waba_id || null, wa_token });
+  if (!db) {
+    return NextResponse.json(
+      { error: "database_not_configured", message: "The database is not configured on the server." },
+      { status: 503 }
+    );
   }
+
+  await updateUser(db, session.sub, {
+    phone_number_id,
+    waba_id: waba_id || null,
+    wa_token: encryptCredential(wa_token),
+  });
 
   return NextResponse.json({ ok: true, phone_number_id, display });
 }
