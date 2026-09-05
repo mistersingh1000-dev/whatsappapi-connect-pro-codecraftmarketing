@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
@@ -5,6 +6,10 @@ import { getDb, updateUser } from "@/lib/db";
 import { encryptCredential } from "@/lib/credential-crypto";
 
 export const runtime = "nodejs";
+
+function newRegistrationPin(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
 
 export async function POST(req: Request) {
   const jar = await cookies();
@@ -25,6 +30,14 @@ export async function POST(req: Request) {
   if (!appId || !appSecret) {
     return NextResponse.json(
       { error: "meta_not_configured", message: "Meta Embedded Signup is not configured on the server." },
+      { status: 503 }
+    );
+  }
+
+  const db = getDb();
+  if (!db) {
+    return NextResponse.json(
+      { error: "database_not_configured", message: "Firebase is not configured on the server." },
       { status: 503 }
     );
   }
@@ -92,28 +105,88 @@ export async function POST(req: Request) {
     );
   }
 
-  const db = getDb();
-  if (!db) {
-    return NextResponse.json(
-      { error: "database_not_configured", message: "Firebase is not configured on the server." },
-      { status: 503 }
-    );
-  }
-
-  const updated = await updateUser(db, session.sub, {
+  const registrationPin = newRegistrationPin();
+  const saved = await updateUser(db, session.sub, {
     waba_id: String(waba_id),
     phone_number_id: String(phone_number_id),
     wa_token: encryptCredential(accessToken),
     wa_registered: false,
+    wa_registration_pin: encryptCredential(registrationPin),
+    wa_registration_error: null,
+    wa_connected_at: null,
   });
-  if (!updated) {
+  if (!saved) {
     return NextResponse.json({ error: "user_not_found" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    ok: true,
-    waba_id: String(waba_id),
-    phone_number_id: String(phone_number_id),
-    needsRegistration: true,
-  });
+  // Meta requires Cloud API phone registration and a 6-digit two-step PIN.
+  // Generate and store the PIN server-side so customers do not have to manage
+  // another technical credential during onboarding.
+  try {
+    const registerRes = await fetch(
+      `https://graph.facebook.com/${version}/${encodeURIComponent(String(phone_number_id))}/register`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ messaging_product: "whatsapp", pin: registrationPin }),
+        cache: "no-store",
+      }
+    );
+    const registerData = await registerRes.json().catch(() => ({}));
+
+    if (registerRes.ok && registerData?.success === true) {
+      await updateUser(db, session.sub, {
+        wa_registered: true,
+        wa_registration_error: null,
+        wa_connected_at: new Date().toISOString(),
+      });
+
+      return NextResponse.json({
+        ok: true,
+        registered: true,
+        waba_id: String(waba_id),
+        phone_number_id: String(phone_number_id),
+      });
+    }
+
+    const message =
+      registerData?.error?.message ||
+      "Meta signup completed, but the final phone registration step is still pending.";
+    await updateUser(db, session.sub, {
+      wa_registered: false,
+      wa_registration_error: String(message).slice(0, 500),
+    });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        registered: false,
+        needsRegistration: true,
+        message,
+        waba_id: String(waba_id),
+        phone_number_id: String(phone_number_id),
+      },
+      { status: 202 }
+    );
+  } catch {
+    const message = "Meta signup completed, but the final phone registration request could not be completed.";
+    await updateUser(db, session.sub, {
+      wa_registered: false,
+      wa_registration_error: message,
+    });
+    return NextResponse.json(
+      {
+        ok: true,
+        registered: false,
+        needsRegistration: true,
+        message,
+        waba_id: String(waba_id),
+        phone_number_id: String(phone_number_id),
+      },
+      { status: 202 }
+    );
+  }
 }
