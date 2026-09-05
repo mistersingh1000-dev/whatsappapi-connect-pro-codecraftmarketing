@@ -3,10 +3,11 @@ import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, findUser } from "@/lib/db";
 import { getConversation, addMessage } from "@/lib/chat-db";
+import { decryptCredential } from "@/lib/credential-crypto";
 
 export const runtime = "nodejs";
 
-const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || "v21.0";
+const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || "v26.0";
 
 export async function POST(req: Request) {
   const jar = await cookies();
@@ -47,7 +48,8 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!user.wa_token || !user.phone_number_id) {
+    const token = decryptCredential(user.wa_token);
+    if (!token || !user.phone_number_id) {
       return NextResponse.json(
         {
           error: "whatsapp_not_connected",
@@ -58,11 +60,11 @@ export async function POST(req: Request) {
     }
 
     const waRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${user.phone_number_id}/messages`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(user.phone_number_id)}/messages`,
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${user.wa_token}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -72,6 +74,7 @@ export async function POST(req: Request) {
           type: "text",
           text: { preview_url: false, body: content },
         }),
+        cache: "no-store",
       }
     );
 
@@ -80,7 +83,9 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "send_failed",
-          message: waData?.error?.message || "WhatsApp rejected the message.",
+          message:
+            waData?.error?.message ||
+            "WhatsApp rejected the message. If the customer's 24-hour reply window has expired, send an approved template to reopen the conversation.",
         },
         { status: 502 }
       );
