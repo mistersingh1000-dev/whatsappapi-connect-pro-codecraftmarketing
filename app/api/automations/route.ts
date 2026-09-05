@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { findUser, getDb } from "@/lib/db";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
 import {
   createAutomationRule,
   listAutomationRules,
@@ -10,27 +11,37 @@ import {
 
 export const runtime = "nodejs";
 
-async function sessionAndDb() {
+async function context(requireActive = false) {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE_NAME)?.value);
   if (!session) return { error: NextResponse.json({ error: "not_authenticated" }, { status: 401 }) };
   const db = getDb();
   if (!db) return { error: NextResponse.json({ error: "database_not_configured" }, { status: 503 }) };
-  return { session, db };
+  const user = await findUser(db, session.sub);
+  if (!user) return { error: NextResponse.json({ error: "user_not_found" }, { status: 404 }) };
+  const access = accessState(user);
+  if (requireActive && !access.active) {
+    const denied = paidFeatureError(access);
+    return { error: NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status }) };
+  }
+  return { session, db, user, access };
 }
 
 export async function GET() {
-  const ctx = await sessionAndDb();
+  const ctx = await context(false);
   if (ctx.error) return ctx.error;
   try {
-    return NextResponse.json({ rules: await listAutomationRules(ctx.db!, ctx.session!.sub) });
+    return NextResponse.json({
+      rules: await listAutomationRules(ctx.db!, ctx.session!.sub),
+      readOnly: ctx.access!.readOnly,
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "failed" }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  const ctx = await sessionAndDb();
+  const ctx = await context(true);
   if (ctx.error) return ctx.error;
   const body = await req.json().catch(() => ({}));
 
@@ -72,7 +83,7 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const ctx = await sessionAndDb();
+  const ctx = await context(true);
   if (ctx.error) return ctx.error;
   const body = await req.json().catch(() => ({}));
   const ruleId = String(body.ruleId || "");
