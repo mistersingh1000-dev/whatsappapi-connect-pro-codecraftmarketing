@@ -6,9 +6,9 @@ import PendingOrderBanner from "@/components/PendingOrderBanner";
 import ConnectNumber from "@/components/ConnectNumber";
 
 export const metadata: Metadata = {
-  title: "Dashboard — Campaigns, Analytics & API Credentials",
+  title: "Dashboard — WhatsApp Connection, Inbox & Analytics",
   description:
-    "Your WhatsApp Connect Pro dashboard: connect your number, view stats, campaigns, API credentials, delivery reports, templates and contacts.",
+    "Connect your WhatsApp Business Platform account, view real account analytics, manage contacts and open the conversation inbox.",
 };
 
 export default function DashboardPage() {
@@ -16,8 +16,8 @@ export default function DashboardPage() {
     <>
       <PageHeader
         eyebrow="Dashboard"
-        title={<>Your whole operation, <span className="gradient-text">one panel</span></>}
-        subtitle="Apply for the WhatsApp API, connect your number, and manage everything in one place."
+        title={<>Your WhatsApp workspace, <span className="gradient-text">one panel</span></>}
+        subtitle="Connect the Meta account first, then use the real inbox, contacts and analytics for that customer account."
       />
       <section className="container-px py-12">
         <PendingOrderBanner />
