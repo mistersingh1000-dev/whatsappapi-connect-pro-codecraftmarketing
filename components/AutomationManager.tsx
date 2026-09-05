@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 type Rule = {
   id: string;
@@ -16,6 +17,7 @@ type Rule = {
 
 export default function AutomationManager() {
   const [rules, setRules] = useState<Rule[]>([]);
+  const [readOnly, setReadOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -37,6 +39,7 @@ export default function AutomationManager() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || data?.error || "Could not load automations");
       setRules(data.rules || []);
+      setReadOnly(data.readOnly === true);
     } catch (e: any) {
       setError(e?.message || "Could not load automations");
     } finally {
@@ -49,6 +52,7 @@ export default function AutomationManager() {
   }, []);
 
   const create = async () => {
+    if (readOnly) return;
     setBusy("create");
     setError("");
     setSuccess("");
@@ -78,6 +82,7 @@ export default function AutomationManager() {
   };
 
   const toggle = async (rule: Rule) => {
+    if (readOnly) return;
     setBusy(rule.id);
     setError("");
     try {
@@ -105,10 +110,22 @@ export default function AutomationManager() {
             Create simple keyword automations for inbound conversations. This is the first production-safe layer of the future visual chatbot/workflow engine.
           </p>
         </div>
-        <button onClick={() => setShowCreate((v) => !v)} className="btn-primary">
-          {showCreate ? "Cancel" : "New Automation"}
-        </button>
+        {!readOnly && (
+          <button onClick={() => setShowCreate((v) => !v)} className="btn-primary">
+            {showCreate ? "Cancel" : "New Automation"}
+          </button>
+        )}
       </div>
+
+      {readOnly && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.07] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium text-amber-200">Automations are paused because access expired</p>
+            <p className="muted mt-1 text-xs">Existing rules stay saved and visible, but they will not reply until you activate a subscription.</p>
+          </div>
+          <Link href="/pricing" className="btn-primary shrink-0 text-xs">Choose subscription</Link>
+        </div>
+      )}
 
       <div className="mb-6 rounded-2xl border border-emerald/30 bg-emerald/[0.05] p-4">
         <p className="text-sm font-medium">Example</p>
@@ -120,7 +137,7 @@ export default function AutomationManager() {
       {error && <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
       {success && <div className="mb-5 rounded-xl border border-emerald/30 bg-emerald/[0.06] p-4 text-sm text-emerald">{success}</div>}
 
-      {showCreate && (
+      {showCreate && !readOnly && (
         <div className="card mb-8 p-6">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -135,23 +152,19 @@ export default function AutomationManager() {
               </select>
             </div>
           </div>
-
           <div className="mt-4">
             <label className="mb-1.5 block text-sm font-medium">Keywords</label>
             <input className="field" value={form.keywords} onChange={(e) => setForm((f) => ({ ...f, keywords: e.target.value }))} placeholder="price, pricing, cost, charges" />
             <p className="muted mt-1 text-xs">Separate multiple keywords with commas.</p>
           </div>
-
           <div className="mt-4">
             <label className="mb-1.5 block text-sm font-medium">Automatic reply</label>
             <textarea className="field min-h-32 resize-y" value={form.replyText} onChange={(e) => setForm((f) => ({ ...f, replyText: e.target.value }))} placeholder="Hi {{name}}, thanks for your message. Our plans start from..." />
           </div>
-
           <div className="mt-4">
             <label className="mb-1.5 block text-sm font-medium">Add tags <span className="muted">(optional)</span></label>
             <input className="field" value={form.tags} onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))} placeholder="Pricing Lead, Hot Lead" />
           </div>
-
           <button onClick={create} disabled={busy === "create" || !form.name || !form.keywords || !form.replyText} className="btn-primary mt-5 disabled:opacity-50">
             {busy === "create" ? "Creating…" : "Create & Enable"}
           </button>
@@ -161,10 +174,7 @@ export default function AutomationManager() {
       {loading ? (
         <div className="card p-10 text-center muted">Loading automations…</div>
       ) : rules.length === 0 ? (
-        <div className="card p-10 text-center">
-          <p className="font-medium">No automation rules yet</p>
-          <p className="muted mt-2 text-sm">Create a keyword rule to automate your first inbound WhatsApp response.</p>
-        </div>
+        <div className="card p-10 text-center"><p className="font-medium">No automation rules yet</p><p className="muted mt-2 text-sm">Create a keyword rule to automate your first inbound WhatsApp response.</p></div>
       ) : (
         <div className="space-y-4">
           {rules.map((rule) => (
@@ -173,8 +183,8 @@ export default function AutomationManager() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-display font-semibold">{rule.name}</h3>
-                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${rule.enabled ? "bg-emerald/15 text-emerald" : "bg-white/5 muted"}`}>
-                      {rule.enabled ? "Enabled" : "Paused"}
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${rule.enabled && !readOnly ? "bg-emerald/15 text-emerald" : "bg-white/5 muted"}`}>
+                      {readOnly ? "Paused by subscription" : rule.enabled ? "Enabled" : "Paused"}
                     </span>
                   </div>
                   <p className="muted mt-2 text-xs">{rule.matchMode === "exact" ? "Exact" : "Contains"}: {rule.keywords.join(", ")}</p>
@@ -182,9 +192,11 @@ export default function AutomationManager() {
                   {rule.addTags.length > 0 && <p className="muted mt-2 text-xs">Adds tags: {rule.addTags.join(", ")}</p>}
                   <p className="muted mt-2 text-[11px]">Runs: {rule.runCount || 0}{rule.lastRunAt ? ` · Last run ${new Date(rule.lastRunAt).toLocaleString()}` : ""}</p>
                 </div>
-                <button disabled={busy === rule.id} onClick={() => toggle(rule)} className="btn-ghost text-xs disabled:opacity-50">
-                  {busy === rule.id ? "Saving…" : rule.enabled ? "Pause" : "Enable"}
-                </button>
+                {!readOnly && (
+                  <button disabled={busy === rule.id} onClick={() => toggle(rule)} className="btn-ghost text-xs disabled:opacity-50">
+                    {busy === rule.id ? "Saving…" : rule.enabled ? "Pause" : "Enable"}
+                  </button>
+                )}
               </div>
             </div>
           ))}
