@@ -1,8 +1,19 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { createConversation, addMessage, updateMessageStatus, convId } from "@/lib/chat-db";
 
 export const runtime = "nodejs";
+
+function validMetaSignature(rawBody: string, signature: string | null): boolean {
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appSecret || !signature?.startsWith("sha256=")) return false;
+
+  const expected = `sha256=${createHmac("sha256", appSecret).update(rawBody).digest("hex")}`;
+  const a = Buffer.from(signature, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 // Meta calls this to verify the webhook subscription.
 export async function GET(req: Request) {
@@ -20,16 +31,24 @@ export async function GET(req: Request) {
 
 // Incoming messages and delivery receipts.
 export async function POST(req: Request) {
+  const rawBody = await req.text();
+  if (!process.env.META_APP_SECRET) {
+    console.error("Webhook received but META_APP_SECRET is not configured");
+    return NextResponse.json({ error: "webhook_security_not_configured" }, { status: 503 });
+  }
+
+  if (!validMetaSignature(rawBody, req.headers.get("x-hub-signature-256"))) {
+    return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
+  }
+
   const db = getDb();
-  // Always 200 back to Meta, otherwise it retries and eventually disables the
-  // webhook. Log the problem instead of returning an error status.
   if (!db) {
     console.error("Webhook received but database is not configured");
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ error: "database_not_configured" }, { status: 503 });
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = JSON.parse(rawBody || "{}");
 
     for (const entry of body?.entry || []) {
       for (const change of entry?.changes || []) {
@@ -96,6 +115,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     console.error("Webhook error:", e?.message || e);
-    return NextResponse.json({ ok: true });
+    // Return a retriable error rather than acknowledging and silently dropping data.
+    return NextResponse.json({ error: "webhook_processing_failed" }, { status: 500 });
   }
 }
