@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, findUser } from "@/lib/db";
 import { getConversation, addMessage } from "@/lib/chat-db";
-import { decryptCredential } from "@/lib/credential-crypto";
 import { accessState, paidFeatureError } from "@/lib/entitlements";
+import { whatsappApiToken } from "@/lib/whatsapp-auth";
 
 export const runtime = "nodejs";
 
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status });
     }
 
-    const token = decryptCredential(user.wa_token);
+    const token = whatsappApiToken(user);
     if (!token || !user.phone_number_id || user.wa_registered === false) {
       return NextResponse.json(
         {
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
           recipient_type: "individual",
           to: conv.contactPhone,
           type: "text",
-          text: { preview_url: false, body: content },
+          text: { preview_url: false, body: String(content).slice(0, 4096) },
         }),
         cache: "no-store",
       }
@@ -76,14 +76,14 @@ export async function POST(req: Request) {
           error: "send_failed",
           message:
             waData?.error?.message ||
-            "WhatsApp rejected the message. If the customer's 24-hour reply window has expired, send an approved template to reopen the conversation.",
+            "WhatsApp rejected the message. If the customer-service window has expired, send an approved template to reopen the conversation.",
         },
         { status: 502 }
       );
     }
 
     const waMessageId = waData?.messages?.[0]?.id || null;
-    const msg = await addMessage(db, session.sub, conversationId, "user", content, waMessageId);
+    const msg = await addMessage(db, session.sub, conversationId, "user", String(content), waMessageId);
 
     return NextResponse.json({ message: msg });
   } catch (e: any) {
