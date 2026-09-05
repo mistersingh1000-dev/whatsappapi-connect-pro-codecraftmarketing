@@ -3,10 +3,11 @@ import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { decryptCredential } from "@/lib/credential-crypto";
 import { findUser, getDb } from "@/lib/db";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
-async function currentUser() {
+async function currentUser(requireActive = false) {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE_NAME)?.value);
   if (!session) return { error: NextResponse.json({ error: "not_authenticated" }, { status: 401 }) };
@@ -14,6 +15,13 @@ async function currentUser() {
   if (!db) return { error: NextResponse.json({ error: "database_not_configured" }, { status: 503 }) };
   const user = await findUser(db, session.sub);
   if (!user) return { error: NextResponse.json({ error: "user_not_found" }, { status: 404 }) };
+
+  const access = accessState(user);
+  if (requireActive && !access.active) {
+    const denied = paidFeatureError(access);
+    return { error: NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status }) };
+  }
+
   if (!user.waba_id || !user.wa_token || user.wa_registered === false) {
     return {
       error: NextResponse.json(
@@ -24,11 +32,11 @@ async function currentUser() {
   }
   const token = decryptCredential(user.wa_token);
   if (!token) return { error: NextResponse.json({ error: "credential_error" }, { status: 500 }) };
-  return { user, token };
+  return { user, token, access };
 }
 
 export async function GET() {
-  const ctx = await currentUser();
+  const ctx = await currentUser(false);
   if (ctx.error) return ctx.error;
   const { user, token } = ctx;
   const version = process.env.WHATSAPP_API_VERSION || "v26.0";
@@ -49,7 +57,7 @@ export async function GET() {
         { status: 502 }
       );
     }
-    return NextResponse.json({ templates: data?.data || [], paging: data?.paging || null });
+    return NextResponse.json({ templates: data?.data || [], paging: data?.paging || null, readOnly: ctx.access?.readOnly || false });
   } catch {
     return NextResponse.json(
       { error: "meta_unreachable", message: "Could not reach Meta to load templates." },
@@ -59,7 +67,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const ctx = await currentUser();
+  const ctx = await currentUser(true);
   if (ctx.error) return ctx.error;
   const { user, token } = ctx;
   const body = await req.json().catch(() => ({}));
