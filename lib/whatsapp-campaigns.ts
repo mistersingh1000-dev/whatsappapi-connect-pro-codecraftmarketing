@@ -1,7 +1,7 @@
 import type { Firestore } from "firebase-admin/firestore";
-import { decryptCredential } from "@/lib/credential-crypto";
 import { findUser } from "@/lib/db";
 import { accessState } from "@/lib/entitlements";
+import { whatsappApiToken } from "@/lib/whatsapp-auth";
 import {
   getCampaign,
   nextQueuedRecipients,
@@ -81,10 +81,10 @@ export async function processCampaignBatch(
   const user = await findUser(db, userId);
   if (!user) throw new Error("user_not_found");
   if (!accessState(user).active) throw new Error("access_expired");
-  if (!user.phone_number_id || !user.wa_token || user.wa_registered === false) {
+  if (!user.phone_number_id || user.wa_registered === false) {
     throw new Error("whatsapp_not_ready");
   }
-  const token = decryptCredential(user.wa_token);
+  const token = whatsappApiToken(user);
   if (!token) throw new Error("credential_error");
 
   const recipients = await nextQueuedRecipients(db, campaignId, batchSize);
