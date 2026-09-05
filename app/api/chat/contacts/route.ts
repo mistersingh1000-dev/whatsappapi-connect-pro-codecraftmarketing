@@ -1,34 +1,43 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { findUser, getDb } from "@/lib/db";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
 import { createContact, listContacts, updateContactForUser } from "@/lib/chat-db";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+async function context(requireActive = false) {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-  if (!session) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-
+  if (!session) return { error: NextResponse.json({ error: "not_authenticated" }, { status: 401 }) };
   const db = getDb();
-  if (!db) return NextResponse.json({ error: "no_db" }, { status: 501 });
+  if (!db) return { error: NextResponse.json({ error: "no_db" }, { status: 501 }) };
+  const user = await findUser(db, session.sub);
+  if (!user) return { error: NextResponse.json({ error: "user_not_found" }, { status: 404 }) };
+  const access = accessState(user);
+  if (requireActive && !access.active) {
+    const denied = paidFeatureError(access);
+    return { error: NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status }) };
+  }
+  return { session, db, access };
+}
+
+export async function GET() {
+  const ctx = await context(false);
+  if (ctx.error) return ctx.error;
 
   try {
-    const contacts = await listContacts(db, session.sub);
-    return NextResponse.json({ contacts });
+    const contacts = await listContacts(ctx.db!, ctx.session!.sub);
+    return NextResponse.json({ contacts, readOnly: ctx.access!.readOnly });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "failed" }, { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  const jar = await cookies();
-  const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-  if (!session) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-
-  const db = getDb();
-  if (!db) return NextResponse.json({ error: "no_db" }, { status: 501 });
+  const ctx = await context(true);
+  if (ctx.error) return ctx.error;
 
   const { phone, name, marketingOptIn, optInSource } = await req.json().catch(() => ({}));
   if (!phone) return NextResponse.json({ error: "phone_required" }, { status: 400 });
@@ -43,7 +52,7 @@ export async function POST(req: Request) {
 
   try {
     const optedIn = marketingOptIn === true;
-    const contact = await createContact(db, session.sub, clean, name || null, {
+    const contact = await createContact(ctx.db!, ctx.session!.sub, clean, name || null, {
       source: "manual",
       marketingOptIn: optedIn,
       optInSource: optedIn ? String(optInSource || "manual-confirmation").slice(0, 120) : null,
@@ -57,12 +66,8 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const jar = await cookies();
-  const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-  if (!session) return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
-
-  const db = getDb();
-  if (!db) return NextResponse.json({ error: "no_db" }, { status: 501 });
+  const ctx = await context(true);
+  if (ctx.error) return ctx.error;
 
   const body = await req.json().catch(() => ({}));
   const contactId = String(body.contactId || "");
@@ -96,7 +101,7 @@ export async function PATCH(req: Request) {
   }
 
   try {
-    const contact = await updateContactForUser(db, session.sub, contactId, updates);
+    const contact = await updateContactForUser(ctx.db!, ctx.session!.sub, contactId, updates);
     if (!contact) return NextResponse.json({ error: "not_found" }, { status: 404 });
     return NextResponse.json({ contact });
   } catch (e: any) {
