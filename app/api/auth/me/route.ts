@@ -14,6 +14,7 @@ export async function GET() {
   let trialEndsAt = session.trialEndsAt;
   let phoneNumberId: string | null = null;
   let wabaId: string | null = null;
+  let registered = false;
   let name = session.name;
 
   const db = getDb();
@@ -24,6 +25,7 @@ export async function GET() {
       trialEndsAt = user.trial_ends_at;
       phoneNumberId = user.phone_number_id;
       wabaId = user.waba_id;
+      registered = user.wa_registered !== false && Boolean(user.phone_number_id);
       name = user.name || name;
     }
   }
@@ -34,6 +36,7 @@ export async function GET() {
 
   const daysLeft = trialDaysLeft(trialEndsAt);
   const readOnly = plan !== "paid" && daysLeft <= 0;
+  const activationPending = Boolean(phoneNumberId) && !registered;
 
   return NextResponse.json({
     authenticated: true,
@@ -43,7 +46,8 @@ export async function GET() {
     trialEndsAt,
     daysLeft,
     readOnly,
-    connected: !!phoneNumberId,
+    connected: Boolean(phoneNumberId) && registered,
+    activationPending,
     phoneNumberId,
     wabaId,
   });
