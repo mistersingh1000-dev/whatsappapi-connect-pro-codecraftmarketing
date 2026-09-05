@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, findUser } from "@/lib/db";
-import { createOrder, pendingOrderFor } from "@/lib/orders";
+import { createOrder, pendingOrderFor, findOrderByReference } from "@/lib/orders";
 import { sendEmail, customerOrderEmail, adminOrderEmail } from "@/lib/email";
 import { plans, site } from "@/lib/site";
 
@@ -19,7 +19,6 @@ const DURATION_MONTHS: Record<string, number> = {
   lifetime: 1200,
 };
 
-// Tell the dashboard whether this customer already has a payment awaiting review.
 export async function GET() {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE_NAME)?.value);
@@ -52,54 +51,65 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const planId = String(body.planId || "");
   const reference = String(body.reference || "").trim();
-  const payerNote = String(body.note || "").trim();
+  const payerNote = String(body.note || "").trim().slice(0, 500);
 
   const plan = plans.find((p) => p.id === planId);
   const months = DURATION_MONTHS[planId];
   if (!plan || !months) {
     return NextResponse.json({ error: "invalid_plan" }, { status: 400 });
   }
-  if (reference.length < 6) {
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(reference)) {
     return NextResponse.json(
       {
         error: "bad_reference",
-        message: "Please enter the transaction / UTR number from your payment app.",
+        message: "Enter the transaction / UTR number exactly as shown in your payment app.",
       },
       { status: 400 }
     );
   }
 
   try {
-    // One pending order at a time, so a customer can't flood the queue.
     const existing = await pendingOrderFor(db, session.sub);
     if (existing) {
       return NextResponse.json(
         {
           error: "already_pending",
-          message:
-            "You already have a payment under review. We will activate your plan shortly.",
+          message: "You already have a payment under review. We will activate your plan shortly.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const duplicateReference = await findOrderByReference(db, reference);
+    if (duplicateReference) {
+      return NextResponse.json(
+        {
+          error: "reference_already_used",
+          message: "This transaction reference has already been submitted. Please check the number or contact support.",
         },
         { status: 409 }
       );
     }
 
     const user = await findUser(db, session.sub);
+    if (!user) {
+      return NextResponse.json(
+        { error: "user_not_found", message: "Your account record could not be found." },
+        { status: 404 }
+      );
+    }
 
     const order = await createOrder(db, {
       userId: session.sub,
-      userName: user?.name || session.name || null,
+      userName: user.name || session.name || null,
       planId: plan.id,
       planName: plan.name,
       amount: plan.price,
       months,
       reference,
       payerNote: payerNote || null,
-      decidedAt: null as any,
-      decidedBy: null as any,
-    } as any);
+    });
 
-    // Emails are best-effort. The order is already saved, and it shows in the
-    // admin panel either way, so a mail failure must not lose the sale.
     const adminEmail = process.env.ADMIN_EMAIL || site.email;
     const adminUrl = `${site.domain}/admin/orders`;
 
