@@ -14,6 +14,9 @@ export type AppUser = {
   waba_id: string | null;
   phone_number_id: string | null;
   wa_token: string | null;
+  // Embedded Signup stores false after token exchange and flips to true after
+  // the Cloud API /register step succeeds. Optional for older user documents.
+  wa_registered?: boolean;
   created_at: string; // ISO
 };
 
