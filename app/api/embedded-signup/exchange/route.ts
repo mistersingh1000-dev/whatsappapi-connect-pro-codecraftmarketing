@@ -4,7 +4,11 @@ import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, findUser, updateUser } from "@/lib/db";
 import { encryptCredential } from "@/lib/credential-crypto";
-import { provisionProviderAccess, providerModeEnabled } from "@/lib/meta-provider";
+import {
+  provisionProviderAccess,
+  providerMessagingToken,
+  providerModeEnabled,
+} from "@/lib/meta-provider";
 import { accessState, paidFeatureError } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
@@ -52,7 +56,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let accessToken = "";
+  let signupAccessToken = "";
   try {
     const tokenRes = await fetch(
       `https://graph.facebook.com/${version}/oauth/access_token?client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&code=${encodeURIComponent(String(code))}`,
@@ -65,7 +69,7 @@ export async function POST(req: Request) {
         { status: 502 }
       );
     }
-    accessToken = tokenData.access_token;
+    signupAccessToken = tokenData.access_token;
   } catch {
     return NextResponse.json(
       { error: "meta_unreachable", message: "Could not reach Meta to finish authorization." },
@@ -77,7 +81,7 @@ export async function POST(req: Request) {
   try {
     const verifyRes = await fetch(
       `https://graph.facebook.com/${version}/${encodeURIComponent(String(phone_number_id))}?fields=id,display_phone_number,verified_name`,
-      { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }
+      { headers: { Authorization: `Bearer ${signupAccessToken}` }, cache: "no-store" }
     );
     const verifyData = await verifyRes.json().catch(() => ({}));
     if (!verifyRes.ok || String(verifyData?.id || "") !== String(phone_number_id)) {
@@ -109,12 +113,25 @@ export async function POST(req: Request) {
     );
   }
 
+  const operationalToken = providerModeEnabled()
+    ? providerMessagingToken()
+    : signupAccessToken;
+  if (!operationalToken) {
+    return NextResponse.json(
+      {
+        error: "provider_messaging_token_missing",
+        message: "Provider mode is enabled but the Meta system-user messaging token is missing.",
+      },
+      { status: 503 }
+    );
+  }
+
   try {
     const subscribeRes = await fetch(
       `https://graph.facebook.com/${version}/${encodeURIComponent(String(waba_id))}/subscribed_apps`,
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${operationalToken}` },
         cache: "no-store",
       }
     );
@@ -136,7 +153,7 @@ export async function POST(req: Request) {
   const saved = await updateUser(db, session.sub, {
     waba_id: String(waba_id),
     phone_number_id: String(phone_number_id),
-    wa_token: encryptCredential(accessToken),
+    wa_token: encryptCredential(signupAccessToken),
     wa_registered: false,
     wa_registration_pin: encryptCredential(registrationPin),
     wa_registration_error: null,
@@ -152,7 +169,7 @@ export async function POST(req: Request) {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${operationalToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ messaging_product: "whatsapp", pin: registrationPin }),
@@ -161,7 +178,7 @@ export async function POST(req: Request) {
     );
     const registerData = await registerRes.json().catch(() => ({}));
 
-    if (registerRes.ok && registerData?.success === true) {
+    if (registerRes.ok && (registerData?.success === true || registerData?.success === "true")) {
       await updateUser(db, session.sub, {
         wa_registered: true,
         wa_registration_error: null,
