@@ -9,6 +9,8 @@ type User = {
   trial_ends_at: string;
   phone_number_id: string | null;
   waba_id: string | null;
+  wa_registered?: boolean;
+  wa_registration_error?: string | null;
   created_at: string;
 };
 
@@ -26,7 +28,7 @@ export default function AdminPanel() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/users");
+      const res = await fetch("/api/admin/users", { cache: "no-store" });
       const data = await res.json();
       if (res.ok) setUsers(data.users || []);
       else setMsg(data.error || "Failed to load users");
@@ -73,8 +75,9 @@ export default function AdminPanel() {
     <section className="container-px py-12">
       <div className="mb-8">
         <h1 className="font-display text-3xl font-bold">Admin Panel</h1>
-        <p className="muted mt-2">Manage all customer accounts, plans, and subscriptions</p>
+        <p className="muted mt-2">Manage customers, plans, payments and WhatsApp activation status.</p>
         <div className="mt-4 flex flex-wrap gap-2">
+          <a href="/admin/system-health" className="btn-primary text-xs">System Health</a>
           <a href="/admin/orders" className="btn-ghost text-xs">Payments</a>
           <a href="/admin/enquiries" className="btn-ghost text-xs">Enquiries</a>
           <a href="/admin/conversations" className="btn-ghost text-xs">Conversations</a>
@@ -89,21 +92,40 @@ export default function AdminPanel() {
             <tr className="border-b border-line">
               <th className="px-4 py-3 text-left text-sm font-semibold">Email</th>
               <th className="px-4 py-3 text-left text-sm font-semibold">Plan</th>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Trial Ends</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold">Trial / Access Ends</th>
               <th className="px-4 py-3 text-left text-sm font-semibold">WhatsApp</th>
               <th className="px-4 py-3 text-left text-sm font-semibold">Action</th>
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-b border-line hover:bg-white/[0.03]">
-                <td className="px-4 py-3 text-sm font-mono">{user.email}</td>
-                <td className="px-4 py-3 text-sm"><span className="inline-flex rounded-full px-2.5 py-1 text-xs font-medium bg-emerald/20 text-emerald">{user.plan}</span></td>
-                <td className="px-4 py-3 text-sm">{new Date(user.trial_ends_at).toLocaleDateString()}</td>
-                <td className="px-4 py-3 text-sm">{user.phone_number_id ? "✓" : "—"}</td>
-                <td className="px-4 py-3"><button onClick={() => startEdit(user)} className="text-sm text-emerald hover:underline">Edit</button></td>
-              </tr>
-            ))}
+            {users.map((user) => {
+              const status = !user.phone_number_id
+                ? { text: "Not connected", cls: "muted" }
+                : user.wa_registered === false
+                  ? { text: "Activation pending", cls: "text-amber-300" }
+                  : { text: "Connected", cls: "text-emerald" };
+
+              return (
+                <tr key={user.id} className="border-b border-line hover:bg-white/[0.03]">
+                  <td className="px-4 py-3 text-sm font-mono">{user.email}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className="inline-flex rounded-full bg-emerald/20 px-2.5 py-1 text-xs font-medium text-emerald">{user.plan}</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{new Date(user.trial_ends_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className={status.cls}>{status.text}</span>
+                    {user.wa_registration_error && user.wa_registered === false && (
+                      <p className="muted mt-1 max-w-xs text-[11px] leading-relaxed" title={user.wa_registration_error}>
+                        {user.wa_registration_error.slice(0, 90)}{user.wa_registration_error.length > 90 ? "…" : ""}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => startEdit(user)} className="text-sm text-emerald hover:underline">Edit</button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -123,7 +145,7 @@ export default function AdminPanel() {
               </select>
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Trial Ends</label>
+              <label className="mb-1.5 block text-sm font-medium">Access Ends</label>
               <input type="date" className="field" value={editForm.trial_ends_at} onChange={(e) => setEditForm((f) => ({ ...f, trial_ends_at: e.target.value }))} />
             </div>
           </div>
