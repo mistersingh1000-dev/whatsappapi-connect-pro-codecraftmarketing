@@ -16,24 +16,75 @@ type Health = {
   checks: Check[];
   metaApiVersion: string;
   externalMetaChecks: string[];
+  trialDays?: number;
+  providerMode?: boolean;
+  creditLineMode?: boolean;
+};
+
+type MetaReadiness = {
+  checkedAt: string;
+  graphVersion: string;
+  app: { configured: boolean; reachable: boolean; name: string | null; error: string | null };
+  providerToken: {
+    configured: boolean;
+    valid: boolean | null;
+    expiresAt: string | null;
+    scopes: string[];
+    hasBusinessManagement: boolean;
+    hasWhatsAppManagement: boolean;
+    hasWhatsAppMessaging: boolean;
+    error: string | null;
+  };
+  providerBusiness: {
+    configured: boolean;
+    reachable: boolean | null;
+    name: string | null;
+    systemUserFound: boolean | null;
+    error: string | null;
+  };
 };
 
 export default function SystemHealth() {
   const [data, setData] = useState<Health | null>(null);
+  const [meta, setMeta] = useState<MetaReadiness | null>(null);
   const [error, setError] = useState("");
+  const [checkingMeta, setCheckingMeta] = useState(false);
+
+  const loadMeta = async () => {
+    setCheckingMeta(true);
+    try {
+      const res = await fetch("/api/admin/meta-readiness", { cache: "no-store" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || "Could not run Meta readiness checks.");
+      setMeta(body);
+    } catch (e: any) {
+      setError(e?.message || "Could not run Meta readiness checks.");
+    } finally {
+      setCheckingMeta(false);
+    }
+  };
 
   useEffect(() => {
-    fetch("/api/admin/system-health", { cache: "no-store" })
-      .then(async (res) => {
+    Promise.all([
+      fetch("/api/admin/system-health", { cache: "no-store" }).then(async (res) => {
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body?.error || "Could not load system health.");
         return body;
+      }),
+      fetch("/api/admin/meta-readiness", { cache: "no-store" }).then(async (res) => {
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body?.error || "Could not load Meta readiness.");
+        return body;
+      }),
+    ])
+      .then(([health, metaHealth]) => {
+        setData(health);
+        setMeta(metaHealth);
       })
-      .then(setData)
       .catch((e) => setError(e?.message || "Could not load system health."));
   }, []);
 
-  if (error) {
+  if (error && !data) {
     return <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm">{error}</div>;
   }
   if (!data) return <div className="muted p-4">Checking configuration…</div>;
@@ -53,7 +104,7 @@ export default function SystemHealth() {
               {data.requiredReady ? "Core server configuration is ready" : "Some required configuration is missing"}
             </h2>
             <p className="muted mt-1 text-sm">
-              This page never displays secret values. It only checks whether each required setting exists and whether Firebase can initialize.
+              Secret values are never displayed. The checks only report readiness and live Meta validation results.
             </p>
           </div>
         </div>
@@ -70,27 +121,68 @@ export default function SystemHealth() {
           </span>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          {required.map((check) => (
-            <HealthCard key={check.id} check={check} />
-          ))}
+          {required.map((check) => <HealthCard key={check.id} check={check} />)}
         </div>
+      </section>
+
+      <section>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-display text-xl font-semibold">Live Meta readiness</h2>
+            <p className="muted mt-1 text-sm">Tests your configured Meta app and provider credentials without exposing any secret.</p>
+          </div>
+          <button onClick={loadMeta} disabled={checkingMeta} className="btn-ghost text-xs disabled:opacity-50">
+            {checkingMeta ? "Checking Meta…" : "Run checks again"}
+          </button>
+        </div>
+
+        {!meta ? (
+          <div className="card p-5 muted">Meta checks are not available yet.</div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-3">
+            <LiveCard
+              label="Meta App"
+              ok={meta.app.reachable}
+              status={meta.app.reachable ? `Reachable${meta.app.name ? ` · ${meta.app.name}` : ""}` : "Not verified"}
+              help={meta.app.error || "App ID and App Secret were accepted by Meta Graph API."}
+            />
+            <LiveCard
+              label="Provider messaging token"
+              ok={meta.providerToken.valid === true && meta.providerToken.hasWhatsAppMessaging}
+              status={meta.providerToken.configured ? (meta.providerToken.valid ? "Valid" : "Not valid") : "Not configured"}
+              help={
+                meta.providerToken.error ||
+                `Scopes: ${meta.providerToken.scopes.length ? meta.providerToken.scopes.join(", ") : "none returned"}`
+              }
+            />
+            <LiveCard
+              label="Provider Business / System User"
+              ok={meta.providerBusiness.reachable === true && meta.providerBusiness.systemUserFound !== false}
+              status={meta.providerBusiness.reachable ? `Reachable${meta.providerBusiness.name ? ` · ${meta.providerBusiness.name}` : ""}` : "Not verified"}
+              help={
+                meta.providerBusiness.error ||
+                (meta.providerBusiness.systemUserFound === true
+                  ? "Configured System User is present in the provider business."
+                  : "System User membership has not been confirmed.")
+              }
+            />
+          </div>
+        )}
       </section>
 
       <section>
         <h2 className="font-display text-xl font-semibold">Provider-mode configuration</h2>
         <p className="muted mt-1 text-sm leading-relaxed">
-          These depend on how Meta approves your Tech Provider / Solution Partner setup. They are not required for a basic manually connected Cloud API account.
+          Provider settings become required when one-click multi-client provider mode is enabled. Credit-line settings stay optional unless you explicitly enable provider billing.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {optional.map((check) => (
-            <HealthCard key={check.id} check={check} />
-          ))}
+          {optional.map((check) => <HealthCard key={check.id} check={check} />)}
         </div>
       </section>
 
       <section className="card p-6">
-        <h2 className="font-display text-lg font-semibold">Checks that cannot be proved by environment variables</h2>
-        <p className="muted mt-1 text-sm">These must be confirmed inside Meta Business / App Review.</p>
+        <h2 className="font-display text-lg font-semibold">Meta approvals / real-account checks</h2>
+        <p className="muted mt-1 text-sm">These cannot be fully proved from environment variables alone.</p>
         <ul className="mt-4 space-y-3">
           {data.externalMetaChecks.map((item) => (
             <li key={item} className="flex items-start gap-2.5 text-sm">
@@ -114,6 +206,21 @@ function HealthCard({ check }: { check: Check }) {
         </span>
       </div>
       <p className="muted mt-2 text-xs leading-relaxed">{check.help}</p>
+    </div>
+  );
+}
+
+function LiveCard({ label, ok, status, help }: { label: string; ok: boolean; status: string; help: string }) {
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-display text-sm font-semibold">{label}</h3>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${ok ? "bg-emerald/15 text-emerald" : "bg-amber-500/15 text-amber-300"}`}>
+          {ok ? "Pass" : "Check"}
+        </span>
+      </div>
+      <p className="mt-3 text-sm font-medium">{status}</p>
+      <p className="muted mt-1.5 text-xs leading-relaxed">{help}</p>
     </div>
   );
 }
