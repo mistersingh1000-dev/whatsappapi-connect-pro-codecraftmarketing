@@ -4,6 +4,7 @@ import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, findUser } from "@/lib/db";
 import { getConversation, addMessage } from "@/lib/chat-db";
 import { decryptCredential } from "@/lib/credential-crypto";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -32,28 +33,18 @@ export async function POST(req: Request) {
     const user = await findUser(db, session.sub);
     if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
 
-    if (user.plan === "suspended") {
-      return NextResponse.json(
-        { error: "suspended", message: "This account is suspended." },
-        { status: 403 }
-      );
-    }
-
-    const expired =
-      user.plan !== "paid" && new Date(user.trial_ends_at).getTime() < Date.now();
-    if (expired) {
-      return NextResponse.json(
-        { error: "trial_expired", message: "Your trial has ended. Upgrade to keep sending." },
-        { status: 402 }
-      );
+    const access = accessState(user);
+    if (!access.active) {
+      const denied = paidFeatureError(access);
+      return NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status });
     }
 
     const token = decryptCredential(user.wa_token);
-    if (!token || !user.phone_number_id) {
+    if (!token || !user.phone_number_id || user.wa_registered === false) {
       return NextResponse.json(
         {
           error: "whatsapp_not_connected",
-          message: "Connect your WhatsApp number in API Setup first.",
+          message: "Connect and activate your WhatsApp number in API Setup first.",
         },
         { status: 400 }
       );
