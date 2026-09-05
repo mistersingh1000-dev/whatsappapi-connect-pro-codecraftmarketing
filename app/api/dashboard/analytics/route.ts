@@ -22,13 +22,15 @@ export async function GET() {
 
     const msLeft = new Date(user.trial_ends_at).getTime() - Date.now();
     const trialDaysLeft = Math.max(0, Math.ceil(msLeft / 86400000));
+    const connectedToWhatsApp = Boolean(user.phone_number_id) && user.wa_registered !== false;
 
     return NextResponse.json({
       analytics: {
         ...stats,
         trialDaysLeft,
         plan: user.plan,
-        connectedToWhatsApp: !!user.phone_number_id,
+        connectedToWhatsApp,
+        activationPending: Boolean(user.phone_number_id) && !connectedToWhatsApp,
       },
     });
   } catch (e: any) {

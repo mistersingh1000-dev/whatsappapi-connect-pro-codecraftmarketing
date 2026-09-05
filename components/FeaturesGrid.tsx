@@ -1,9 +1,9 @@
-import { features } from "@/lib/site";
+import { launchFeatures } from "@/lib/launch-features";
 import { Icon, type IconName } from "./Icons";
 import Reveal from "./Reveal";
 
 export default function FeaturesGrid({ limit }: { limit?: number }) {
-  const list = limit ? features.slice(0, limit) : features;
+  const list = limit ? launchFeatures.slice(0, limit) : launchFeatures;
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {list.map((f, i) => {

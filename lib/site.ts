@@ -1,19 +1,19 @@
 export const site = {
   name: "WhatsApp Connect Pro",
   shortName: "Connect Pro",
-  domain: "https://whatsappapi-connect-pro-codecraftma.vercel.app",
-  tagline: "Official WhatsApp Business API Provider",
+  domain:
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://whatsappapi-connect-pro-codecraftma.vercel.app",
+  tagline: "WhatsApp Cloud API onboarding and conversation platform",
   description:
-    "Get Official WhatsApp Business API with Meta Embedded Signup. Instant activation, bulk messaging, marketing campaigns, CRM integration and 24/7 support.",
+    "Connect customer-owned WhatsApp Business Platform accounts, manage conversations and contacts, process Meta webhooks, and support compliant messaging from one dashboard.",
   email: "mistersingh1000@gmail.com",
   phone: "+91 70097 32517",
   // wa.me format: country code + number, no "+", spaces or dashes.
   whatsapp: "917009732517",
-  whatsappMessage: "hi, i am interested for taking whatsapp api plan.",
+  whatsappMessage: "Hi, I am interested in the WhatsApp Connect Pro platform.",
 
   // ---- UPI payment (manual approval) ----
-  // QR image lives at /public/upi-qr.jpeg. Customers can also pay to the
-  // UPI id below if their app cannot scan.
   upiId: "9501216365@mbk",
   upiName: "Codecraft Marketing · MobiKwik",
   upiQrImage: "/upi-qr.jpeg",
@@ -34,7 +34,7 @@ export const footerLinks = {
     { label: "Home", href: "/" },
     { label: "Features", href: "/features" },
     { label: "Pricing", href: "/pricing" },
-    { label: "Dashboard Demo", href: "/dashboard" },
+    { label: "Dashboard", href: "/dashboard" },
   ],
   Developers: [
     { label: "API Setup", href: "/api-setup" },
@@ -71,7 +71,7 @@ export const plans: Plan[] = [
     name: "Monthly",
     price: 499,
     per: "/month",
-    features: ["Official WhatsApp API", "Embedded Signup", "Dashboard access", "Technical support"],
+    features: ["Cloud API dashboard", "Account connection", "Conversation inbox", "Technical support"],
     cta: "Start now",
   },
   {
@@ -79,7 +79,7 @@ export const plans: Plan[] = [
     name: "3 Months",
     price: 999,
     per: "/quarter",
-    features: ["Everything in Monthly", "Priority support", "Free setup"],
+    features: ["Everything in Monthly", "Priority support", "Guided setup"],
     cta: "Choose plan",
   },
   {
@@ -87,7 +87,7 @@ export const plans: Plan[] = [
     name: "6 Months",
     price: 1499,
     per: "/6 mo",
-    features: ["Everything included", "Faster activation", "API assistance"],
+    features: ["Everything included", "Onboarding assistance", "API guidance"],
     cta: "Choose plan",
   },
   {
@@ -96,7 +96,7 @@ export const plans: Plan[] = [
     price: 1999,
     per: "/year",
     badge: "Best seller",
-    features: ["Best-seller savings", "Premium support", "API guidance"],
+    features: ["Longer access", "Priority support", "API guidance"],
     cta: "Choose plan",
   },
   {
@@ -104,7 +104,7 @@ export const plans: Plan[] = [
     name: "3 Years",
     price: 2999,
     per: "/3 yr",
-    features: ["Long-term savings", "Premium dashboard", "Priority ticket support"],
+    features: ["Long-term platform access", "Priority support", "Onboarding assistance"],
     cta: "Choose plan",
   },
   {
@@ -112,7 +112,7 @@ export const plans: Plan[] = [
     name: "5 Years",
     price: 3999,
     per: "/5 yr",
-    features: ["VIP support", "Business consultation", "Dedicated assistance"],
+    features: ["Long-term platform access", "Priority support", "Business onboarding assistance"],
     cta: "Choose plan",
   },
   {
@@ -120,80 +120,100 @@ export const plans: Plan[] = [
     name: "10 Years",
     price: 4999,
     per: "/10 yr",
-    features: ["Maximum savings", "Premium benefits", "Fastest support"],
+    features: ["Long-term platform access", "Priority support", "Business onboarding assistance"],
     cta: "Choose plan",
   },
   {
     id: "lifetime",
     name: "Lifetime",
     price: 5999,
-    note: "one-time",
+    note: "one-time platform access",
     badge: "Most popular",
     highlight: true,
     features: [
-      "Lifetime access",
-      "Premium support",
-      "Future updates",
-      "Priority activation",
-      "VIP assistance",
+      "Lifetime platform access",
+      "Priority support",
+      "Product updates included",
+      "Guided onboarding",
     ],
     cta: "Buy lifetime plan",
   },
 ];
 
+// Kept for compatibility with components that may still import this list.
+// Customer-facing feature grids use lib/launch-features.ts so only tested scope is advertised.
 export const features = [
-  { title: "Official WhatsApp Business API", desc: "Cloud API access straight from Meta — no grey routes, no ban risk.", icon: "shield" },
-  { title: "Meta Embedded Signup", desc: "Onboard inside our dashboard with Facebook login in a single flow.", icon: "spark" },
-  { title: "Instant Number Activation", desc: "Connect and verify your business number in minutes, not days.", icon: "bolt" },
-  { title: "Bulk Messaging", desc: "Reach thousands of opted-in customers with approved templates.", icon: "send" },
-  { title: "OTP Authentication", desc: "Deliver one-time passwords with high-priority authentication templates.", icon: "key" },
-  { title: "Marketing Campaigns", desc: "Schedule, segment and track promotional broadcasts that convert.", icon: "rocket" },
-  { title: "Multi-Agent Inbox", desc: "A shared team inbox so multiple agents handle chats without collisions.", icon: "inbox" },
-  { title: "Chatbot Integration", desc: "Automate replies and flows, then hand off to a human when needed.", icon: "bot" },
-  { title: "Webhook Support", desc: "Real-time delivery, read and inbound events pushed to your endpoint.", icon: "webhook" },
-  { title: "CRM Integration", desc: "Sync contacts and conversations with your existing CRM stack.", icon: "link" },
-  { title: "Analytics Dashboard", desc: "Live metrics on sends, delivery, reads and campaign performance.", icon: "chart" },
-  { title: "Delivery Reports", desc: "Per-message status with downloadable, exportable reports.", icon: "report" },
+  { title: "WhatsApp Cloud API Connection", desc: "Connect and validate a customer-owned WhatsApp phone number.", icon: "shield" },
+  { title: "Meta Embedded Signup", desc: "Use Facebook Login for Business when your Meta configuration and permissions are enabled.", icon: "spark" },
+  { title: "Conversation Inbox", desc: "View inbound conversations and reply from the dashboard within applicable messaging rules.", icon: "inbox" },
+  { title: "Contacts", desc: "Keep WhatsApp contacts organized per customer account.", icon: "link" },
+  { title: "Signed Webhooks", desc: "Process authenticated Meta webhook events for messages and message status updates.", icon: "webhook" },
+  { title: "Account Analytics", desc: "See conversation, contact, message, unread and connection metrics.", icon: "chart" },
 ];
 
 export const signupSteps = [
-  { n: 1, title: "Login with Facebook", desc: "Sign in with the Facebook account that owns your Business Manager." },
-  { n: 2, title: "Verify business details", desc: "Confirm your business name, category and legal details with Meta." },
-  { n: 3, title: "Connect WhatsApp number", desc: "Pick a new or existing number and receive your verification code." },
-  { n: 4, title: "Activate WhatsApp API", desc: "Meta provisions your WABA and phone number ID automatically." },
-  { n: 5, title: "Start sending messages", desc: "Grab your API credentials and send your first template message." },
+  {
+    n: 1,
+    title: "Sign in to the platform",
+    desc: "Create your WhatsApp Connect Pro account and open the API setup area.",
+  },
+  {
+    n: 2,
+    title: "Open Meta onboarding",
+    desc: "Use Embedded Signup when enabled, or connect approved Cloud API credentials manually.",
+  },
+  {
+    n: 3,
+    title: "Choose business assets",
+    desc: "Select the correct Meta Business Portfolio, WhatsApp Business Account and phone number.",
+  },
+  {
+    n: 4,
+    title: "Complete Meta requirements",
+    desc: "Finish any number verification, business verification or permission steps Meta requires for that account.",
+  },
+  {
+    n: 5,
+    title: "Use the dashboard",
+    desc: "Receive webhook events, manage conversations and send messages subject to WhatsApp messaging rules.",
+  },
 ];
 
 export const faqs = [
   {
-    q: "What is the WhatsApp Business API?",
-    a: "It's Meta's official programmatic channel for businesses to send and receive WhatsApp messages at scale — notifications, OTPs, support and marketing. Unlike unofficial bulk tools, it's compliant and built so your number won't get banned for normal, opt-in messaging.",
+    q: "What is the WhatsApp Business Platform Cloud API?",
+    a: "It is Meta's official programmatic WhatsApp interface for eligible businesses. Businesses can send and receive messages through approved integrations, subject to Meta's policies, permissions, templates and messaging rules.",
   },
   {
     q: "How does Embedded Signup work?",
-    a: "Embedded Signup is Meta's in-context onboarding. You log in with Facebook from inside our dashboard, confirm your business, select a phone number and approve permissions — all in one popup. We then receive a token to provision your WhatsApp Business Account instantly.",
+    a: "Embedded Signup uses Meta's Facebook Login for Business flow. A customer chooses the relevant business and WhatsApp assets in a Meta-hosted flow, and the platform completes the server-side connection after Meta returns the required authorization result.",
   },
   {
-    q: "How long does activation take?",
-    a: "Most numbers activate within minutes once Embedded Signup completes. Business verification with Meta, if required for higher limits, can take longer and depends on Meta's review.",
+    q: "Does Embedded Signup work immediately for every customer?",
+    a: "Not always. Your Meta app must be configured correctly, and production onboarding can require approved permissions, advanced access, business verification or other Meta review steps. Individual customer accounts can also have their own eligibility or verification requirements.",
   },
   {
-    q: "Can I use my existing number?",
-    a: "Yes. You can migrate a number that isn't already registered on a personal or Business app, or pick a fresh number. We guide you through the verification either way.",
+    q: "Can I use an existing WhatsApp number?",
+    a: "It depends on the number's current WhatsApp setup and Meta's supported migration or coexistence options at the time you onboard it. Check the current Meta flow shown during onboarding rather than deleting an existing account without confirming the migration path.",
   },
   {
-    q: "Do you provide support?",
-    a: "Yes — every plan includes technical support, and higher tiers add priority and VIP assistance with dedicated onboarding help.",
+    q: "Can I send bulk or marketing messages?",
+    a: "Business-initiated messaging must follow Meta's current opt-in, template, category and policy requirements. The platform should only be used for compliant recipients and approved message flows.",
   },
   {
-    q: "Can I integrate CRM systems?",
-    a: "Absolutely. Use our webhooks and REST endpoints to sync with your CRM, helpdesk or custom backend. Popular CRMs connect through our integrations or a few lines of API code.",
+    q: "Are Meta messaging charges included in the platform price?",
+    a: "No. The prices shown here are for WhatsApp Connect Pro platform access. Any WhatsApp Business Platform usage charges billed by Meta are separate and depend on the customer's own account activity and Meta's current pricing.",
+  },
+  {
+    q: "Do you provide setup support?",
+    a: "Yes. The platform plans include onboarding guidance for connecting the account, checking IDs and credentials, and configuring the required webhook and dashboard steps.",
   },
 ];
 
+// Legacy compatibility export. Not rendered on the launch homepage.
 export const stats = [
-  { value: 12, suffix: "M+", label: "Messages delivered" },
-  { value: 3500, suffix: "+", label: "Businesses onboarded" },
-  { value: 99.9, suffix: "%", label: "API uptime" },
-  { value: 24, suffix: "/7", label: "Support coverage" },
+  { value: 6, suffix: "", label: "Launch-ready capabilities" },
+  { value: 7, suffix: " days", label: "Dashboard trial" },
+  { value: 1, suffix: "", label: "Unified conversation dashboard" },
+  { value: 0, suffix: "", label: "Unsupported performance claims" },
 ];

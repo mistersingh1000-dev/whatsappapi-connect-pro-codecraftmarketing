@@ -6,18 +6,18 @@ import SectionHeading from "@/components/SectionHeading";
 import { Icon } from "@/components/Icons";
 
 export const metadata: Metadata = {
-  title: "Pricing — WhatsApp Business API Plans",
+  title: "Pricing — WhatsApp Cloud API Platform Plans",
   description:
-    "Transparent WhatsApp Business API pricing — monthly to lifetime plans starting at ₹499. Official API, Embedded Signup and support included.",
+    "Platform subscription plans for WhatsApp Connect Pro. Meta usage charges, if applicable, are separate from the platform subscription.",
 };
 
 const compare = [
-  "Official WhatsApp Cloud API",
-  "Meta Embedded Signup",
+  "WhatsApp Cloud API connection",
+  "Meta Embedded Signup when enabled for your Meta app",
   "Dashboard & login credentials",
-  "Webhooks & API access",
-  "Template message management",
-  "Delivery & read reports",
+  "Signed webhook processing",
+  "Conversation inbox & contacts",
+  "Account analytics",
 ];
 
 export default function PricingPage() {
@@ -25,18 +25,17 @@ export default function PricingPage() {
     <>
       <PageHeader
         eyebrow="Pricing"
-        title={<>Choose your <span className="gradient-text">perfect plan</span></>}
-        subtitle="Buy a plan, receive your login by email, and activate the official API through Embedded Signup. No hidden setup fees."
+        title={<>Choose your <span className="gradient-text">platform plan</span></>}
+        subtitle="Subscribe to the dashboard and onboarding platform. Meta WhatsApp usage charges are separate and depend on the customer's own WhatsApp Business Account usage."
       />
       <section className="container-px pt-12">
         <div className="flex flex-col items-center justify-between gap-5 rounded-3xl border border-emerald/40 bg-gradient-to-r from-emerald/[0.10] to-transparent p-6 sm:flex-row sm:p-8">
           <div>
-            <h2 className="font-display text-xl font-semibold sm:text-2xl">
-              Try it free for 7 days
-            </h2>
+            <h2 className="font-display text-xl font-semibold sm:text-2xl">Try the dashboard for 7 days</h2>
             <p className="muted mt-2 max-w-xl text-sm leading-relaxed">
-              Sign up free, connect your number and send real WhatsApp messages on the official API.
-              No credit card — your trial auto-expires after 7 days.
+              Create an account, explore the dashboard and connect your WhatsApp Business Platform
+              credentials. Real-message availability still depends on a valid Meta account, number,
+              permissions and messaging rules.
             </p>
           </div>
           <a href="/signup" className="btn-primary shrink-0">Start free trial</a>
@@ -46,13 +45,14 @@ export default function PricingPage() {
       <section className="container-px py-12">
         <PricingCards />
         <p className="muted mx-auto mt-8 max-w-2xl text-center text-xs">
-          Prices are exclusive of applicable taxes. Meta may bill conversation charges separately
-          per its official pricing. Razorpay handles all payments securely.
+          Prices are for the WhatsApp Connect Pro platform subscription. Meta may bill WhatsApp
+          Business Platform usage separately under its own pricing. Current checkout uses UPI with
+          manual payment verification unless Razorpay checkout is enabled in production.
         </p>
       </section>
 
       <section className="container-px py-12">
-        <SectionHeading eyebrow="Included in every plan" title="The essentials, never gated" />
+        <SectionHeading eyebrow="Included in the current platform" title="Core launch features" />
         <div className="mx-auto mt-10 grid max-w-3xl gap-3 sm:grid-cols-2">
           {compare.map((c) => (
             <div key={c} className="card flex items-center gap-3 p-4 text-sm">

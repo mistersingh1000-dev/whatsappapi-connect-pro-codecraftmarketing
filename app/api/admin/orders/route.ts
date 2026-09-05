@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
-import { getDb, findUser, updateUser } from "@/lib/db";
-import { listOrders, getOrder, decideOrder } from "@/lib/orders";
+import { getDb } from "@/lib/db";
+import {
+  listOrders,
+  getOrder,
+  decideOrder,
+  approveOrderAndExtend,
+} from "@/lib/orders";
 import { sendEmail, activationEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -28,7 +33,6 @@ export async function GET() {
   }
 }
 
-// Approve => activate the plan and extend the expiry. Reject => leave untouched.
 export async function PATCH(req: Request) {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE_NAME)?.value);
@@ -59,27 +63,34 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ ok: true, order: updated });
     }
 
-    // Extend from whichever is later: today, or their current expiry.
-    const user = await findUser(db, order.userId);
-    const base =
-      user && new Date(user.trial_ends_at) > new Date()
-        ? new Date(user.trial_ends_at)
-        : new Date();
-    base.setMonth(base.getMonth() + order.months);
-    const validUntil = base.toISOString();
-
-    await updateUser(db, order.userId, { plan: "paid", trial_ends_at: validUntil });
-    const updated = await decideOrder(db, id, "approved", session.sub);
+    const result = await approveOrderAndExtend(db, id, session.sub);
+    if (!result) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
     const mail = activationEmail({
-      name: order.userName,
-      planName: order.planName,
-      validUntil,
+      name: result.order.userName,
+      planName: result.order.planName,
+      validUntil: result.validUntil,
     });
-    await sendEmail({ to: order.userId, ...mail }).catch(() => null);
+    await sendEmail({ to: result.order.userId, ...mail }).catch(() => null);
 
-    return NextResponse.json({ ok: true, order: updated, validUntil });
+    return NextResponse.json({
+      ok: true,
+      order: result.order,
+      validUntil: result.validUntil,
+    });
   } catch (e: any) {
+    if (e?.message === "already_decided") {
+      return NextResponse.json(
+        { error: "already_decided", message: "This order was already handled." },
+        { status: 409 }
+      );
+    }
+    if (e?.message === "user_not_found") {
+      return NextResponse.json(
+        { error: "user_not_found", message: "The customer account no longer exists." },
+        { status: 404 }
+      );
+    }
     return NextResponse.json({ error: e?.message || "failed" }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 "use client";
+
 import { useCallback, useEffect, useState } from "react";
 import EmbeddedSignupButton from "./EmbeddedSignupButton";
 import { Icon } from "./Icons";
@@ -6,6 +7,9 @@ import { Icon } from "./Icons";
 type Me = {
   authenticated: boolean;
   connected?: boolean;
+  activationPending?: boolean;
+  readOnly?: boolean;
+  accessStatus?: string;
   phoneNumberId?: string | null;
   wabaId?: string | null;
 };
@@ -17,7 +21,10 @@ export default function ConnectNumber() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
-    fetch("/api/auth/me").then((r) => r.json()).then(setMe).catch(() => setMe(null));
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then(setMe)
+      .catch(() => setMe(null));
   }, []);
 
   useEffect(() => load(), [load]);
@@ -27,6 +34,7 @@ export default function ConnectNumber() {
 
   const connect = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (me?.readOnly) return;
     setBusy(true);
     setMsg("");
     try {
@@ -35,12 +43,13 @@ export default function ConnectNumber() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      const d = await res.json();
+      const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.message || "Could not connect.");
-      setMsg(`Connected ✓ ${d.display || ""}`);
+      setForm({ phone_number_id: "", waba_id: "", wa_token: "" });
+      setMsg(`Connected ✓ ${d.display || "Credentials verified with Meta."}`);
       load();
     } catch (err: any) {
-      setMsg(err.message);
+      setMsg(err?.message || "Could not connect.");
     } finally {
       setBusy(false);
     }
@@ -51,19 +60,56 @@ export default function ConnectNumber() {
   if (me.connected) {
     return (
       <div className="mb-6 card p-6">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald/10 text-emerald">
             <Icon.whatsapp className="h-5 w-5" />
           </span>
-          <div>
-            <p className="font-display text-sm font-semibold">WhatsApp number connected</p>
-            <p className="muted mt-0.5 text-xs">
-              Phone number ID: <span className="font-mono">{me.phoneNumberId}</span>
+          <div className="min-w-0">
+            <p className="font-display text-sm font-semibold">WhatsApp connection saved</p>
+            <p className="muted mt-0.5 truncate text-xs">
+              Phone Number ID: <span className="font-mono">{me.phoneNumberId}</span>
             </p>
           </div>
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald/12 px-3 py-1.5 text-xs font-medium text-emerald">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald" /> Active
+          <span className={`ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${me.readOnly ? "bg-amber-500/15 text-amber-300" : "bg-emerald/12 text-emerald"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${me.readOnly ? "bg-amber-300" : "bg-emerald"}`} />
+            {me.readOnly ? "Saved · subscription required" : "Connected"}
           </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (me.activationPending) {
+    return (
+      <div className="mb-6 rounded-2xl border border-amber-500/40 bg-amber-500/[0.07] p-6">
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-500/10 text-amber-300">
+            <Icon.whatsapp className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="font-display text-sm font-semibold text-amber-200">Meta signup completed — activation pending</p>
+            <p className="muted mt-1 text-sm leading-relaxed">
+              Your WhatsApp assets were returned by Meta, but the final Cloud API registration step is not complete yet. Do not create duplicate WABAs by repeatedly starting signup.
+            </p>
+            <p className="muted mt-2 text-xs">Phone Number ID: <span className="font-mono">{me.phoneNumberId}</span></p>
+            <a href="/contact" className="mt-4 inline-flex text-sm font-medium text-emerald hover:underline">Get activation help →</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (me.readOnly) {
+    return (
+      <div className="mb-6 rounded-2xl border border-amber-500/40 bg-amber-500/[0.07] p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-display text-base font-semibold text-amber-200">WhatsApp API onboarding is locked</p>
+            <p className="muted mt-1 max-w-2xl text-sm leading-relaxed">
+              Your 7-day trial or subscription has ended. Choose a subscription to start or reconnect Meta Embedded Signup. Existing account data stays saved.
+            </p>
+          </div>
+          <a href="/pricing" className="btn-primary shrink-0">Choose subscription</a>
         </div>
       </div>
     );
@@ -71,60 +117,45 @@ export default function ConnectNumber() {
 
   return (
     <div className="mb-6 card p-6 sm:p-8">
-      <h3 className="font-display text-lg font-semibold">Apply for WhatsApp API</h3>
-      <p className="muted mt-1 text-sm">
-        Connect your official WhatsApp Business API number so you can start sending during your trial.
-      </p>
-
-      {/* Primary: connect your own Meta credentials (works today) */}
-      <form onSubmit={connect} className="mt-6 space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">Phone Number ID</label>
-            <input className="field" required value={form.phone_number_id} onChange={upd("phone_number_id")} placeholder="e.g. 5567281930045128" />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">WABA ID <span className="muted">(optional)</span></label>
-            <input className="field" value={form.waba_id} onChange={upd("waba_id")} placeholder="WhatsApp Business Account ID" />
-          </div>
-        </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">Access token</label>
-          <input className="field font-mono" required value={form.wa_token} onChange={upd("wa_token")} placeholder="Permanent or temporary Meta token" />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" disabled={busy} className="btn-primary disabled:opacity-60">
-            {busy ? "Verifying…" : "Connect my number"}
-          </button>
-          <a
-            href="https://developers.facebook.com/apps"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-emerald hover:underline"
-          >
-            Where do I get these? →
-          </a>
-        </div>
-        {msg && (
-          <p className="rounded-xl border border-emerald/30 bg-emerald/[0.06] px-3 py-2.5 text-xs">{msg}</p>
-        )}
-      </form>
-
-      <details className="mt-5 text-sm">
-        <summary className="cursor-pointer muted">How to get your Phone Number ID and token</summary>
-        <ol className="muted mt-3 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed">
-          <li>Go to developers.facebook.com → create or open your app → add the WhatsApp product.</li>
-          <li>Open WhatsApp → API Setup. Copy the <span className="font-mono">Phone number ID</span>.</li>
-          <li>Copy the temporary access token shown there (or generate a permanent one via a System User for long-term use).</li>
-          <li>Paste both above and click Connect. We verify them with Meta before saving.</li>
-        </ol>
-      </details>
-
-      {/* Secondary: one-click Embedded Signup (lights up once you're an approved Tech Provider) */}
-      <div className="mt-6 border-t pt-6" style={{ borderColor: "var(--line)" }}>
-        <p className="muted mb-3 text-xs">Or connect in one click, coming soon:</p>
-        <EmbeddedSignupButton onConnected={load} />
+      <div>
+        <p className="eyebrow">Recommended</p>
+        <h3 className="font-display mt-3 text-lg font-semibold">Connect with Meta Embedded Signup</h3>
+        <p className="muted mt-1 text-sm leading-relaxed">
+          Active trials and paid subscriptions can use the Meta-hosted onboarding flow to choose the correct Business Portfolio, WhatsApp Business Account and phone number without copying API credentials.
+        </p>
       </div>
+
+      <div className="mt-5"><EmbeddedSignupButton onConnected={load} /></div>
+
+      <details className="mt-6 rounded-2xl border p-5" style={{ borderColor: "var(--line)" }}>
+        <summary className="cursor-pointer text-sm font-medium">Advanced: connect existing Cloud API credentials manually</summary>
+        <p className="muted mt-3 text-xs leading-relaxed">Use this only when you already have a valid Phone Number ID and access token from Meta. The server validates the token against Meta before saving it.</p>
+
+        <form onSubmit={connect} className="mt-5 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Phone Number ID</label>
+              <input className="field" required value={form.phone_number_id} onChange={upd("phone_number_id")} placeholder="Meta Phone Number ID" inputMode="numeric" autoComplete="off" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">WABA ID <span className="muted">(recommended)</span></label>
+              <input className="field" value={form.waba_id} onChange={upd("waba_id")} placeholder="WhatsApp Business Account ID" inputMode="numeric" autoComplete="off" />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Access token</label>
+            <input type="password" className="field font-mono" required value={form.wa_token} onChange={upd("wa_token")} placeholder="Paste Meta access token" autoComplete="new-password" spellCheck={false} />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="submit" disabled={busy} className="btn-primary disabled:opacity-60">{busy ? "Verifying with Meta…" : "Verify & connect"}</button>
+            <a href="/api-setup" className="text-sm text-emerald hover:underline">Open setup guide →</a>
+          </div>
+
+          {msg && <p className="rounded-xl border border-emerald/30 bg-emerald/[0.06] px-3 py-2.5 text-xs">{msg}</p>}
+        </form>
+      </details>
     </div>
   );
 }

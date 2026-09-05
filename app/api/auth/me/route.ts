@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { COOKIE_NAME, verifySession, trialDaysLeft } from "@/lib/auth";
+import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, findUser } from "@/lib/db";
+import { accessState } from "@/lib/entitlements";
 
 export const runtime = "nodejs";
 
@@ -14,36 +15,43 @@ export async function GET() {
   let trialEndsAt = session.trialEndsAt;
   let phoneNumberId: string | null = null;
   let wabaId: string | null = null;
+  let registered = false;
   let name = session.name;
 
   const db = getDb();
+  let storedUser = null as Awaited<ReturnType<typeof findUser>>;
   if (db) {
-    const user = await findUser(db, session.sub);
-    if (user) {
-      plan = user.plan;
-      trialEndsAt = user.trial_ends_at;
-      phoneNumberId = user.phone_number_id;
-      wabaId = user.waba_id;
-      name = user.name || name;
+    storedUser = await findUser(db, session.sub);
+    if (storedUser) {
+      plan = storedUser.plan;
+      trialEndsAt = storedUser.trial_ends_at;
+      phoneNumberId = storedUser.phone_number_id;
+      wabaId = storedUser.waba_id;
+      registered = storedUser.wa_registered !== false && Boolean(storedUser.phone_number_id);
+      name = storedUser.name || name;
     }
   }
 
-  if (plan === "suspended") {
+  const access = accessState({ plan, trial_ends_at: trialEndsAt });
+  if (access.reason === "suspended") {
     return NextResponse.json({ authenticated: false, suspended: true });
   }
 
-  const daysLeft = trialDaysLeft(trialEndsAt);
-  const readOnly = plan !== "paid" && daysLeft <= 0;
+  const activationPending = Boolean(phoneNumberId) && !registered;
 
   return NextResponse.json({
     authenticated: true,
     name,
     email: session.sub,
-    plan: readOnly ? "expired" : plan,
+    plan,
+    accessStatus: access.reason,
     trialEndsAt,
-    daysLeft,
-    readOnly,
-    connected: !!phoneNumberId,
+    accessEndsAt: access.accessEndsAt,
+    daysLeft: access.daysLeft,
+    readOnly: access.readOnly,
+    activeAccess: access.active,
+    connected: Boolean(phoneNumberId) && registered,
+    activationPending,
     phoneNumberId,
     wabaId,
   });

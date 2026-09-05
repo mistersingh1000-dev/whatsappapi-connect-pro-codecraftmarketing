@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { COOKIE_NAME, createSession, newTrialEnd, TRIAL_DAYS } from "@/lib/auth";
+import { COOKIE_NAME, createSession, newTrialEnd, TRIAL_DAYS, authConfigured } from "@/lib/auth";
 import { getDb, findUser, createUser, normEmail } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -11,42 +11,72 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
   }
 
-  const cleanEmail = normEmail(email);
-  const trialEndsAt = newTrialEnd();
-  const db = getDb();
-
-  if (db) {
-    // Repeat-trial prevention: one account (one trial) per email.
-    const existing = await findUser(db, cleanEmail);
-    if (existing) {
-      return NextResponse.json(
-        { error: "account_exists", message: "An account with this email already exists. Please log in." },
-        { status: 409 }
-      );
-    }
-    const password_hash = await bcrypt.hash(password, 10);
-    try {
-      await createUser(db, {
-        email: cleanEmail,
-        name: name || cleanEmail,
-        password_hash,
-        plan: "trial",
-        trial_ends_at: trialEndsAt,
-        waba_id: null,
-        phone_number_id: null,
-        wa_token: null,
-        created_at: new Date().toISOString(),
-      });
-    } catch (e: any) {
-      return NextResponse.json(
-        { error: "db_error", message: e?.message || "Could not create the account." },
-        { status: 500 }
-      );
-    }
+  if (!authConfigured()) {
+    return NextResponse.json(
+      { error: "auth_not_configured", message: "Authentication is not configured on the server." },
+      { status: 503 }
+    );
   }
-  // If db is null we still issue a trial cookie (no persistence yet).
 
-  const token = await createSession({ email: cleanEmail, name: name || cleanEmail, plan: "trial", trialEndsAt });
+  const cleanEmail = normEmail(email);
+  if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+    return NextResponse.json({ error: "invalid_email", message: "Enter a valid email address." }, { status: 400 });
+  }
+  if (String(password).length < 8) {
+    return NextResponse.json(
+      { error: "weak_password", message: "Password must be at least 8 characters." },
+      { status: 400 }
+    );
+  }
+
+  const db = getDb();
+  if (!db) {
+    return NextResponse.json(
+      {
+        error: "database_not_configured",
+        message: "Account signup is temporarily unavailable because the database is not configured.",
+      },
+      { status: 503 }
+    );
+  }
+
+  const existing = await findUser(db, cleanEmail);
+  if (existing) {
+    return NextResponse.json(
+      { error: "account_exists", message: "An account with this email already exists. Please log in." },
+      { status: 409 }
+    );
+  }
+
+  const trialEndsAt = newTrialEnd();
+  const password_hash = await bcrypt.hash(password, 12);
+
+  try {
+    await createUser(db, {
+      email: cleanEmail,
+      name: String(name || cleanEmail).trim().slice(0, 120),
+      password_hash,
+      plan: "trial",
+      trial_ends_at: trialEndsAt,
+      waba_id: null,
+      phone_number_id: null,
+      wa_token: null,
+      wa_registered: false,
+      created_at: new Date().toISOString(),
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "db_error", message: e?.message || "Could not create the account." },
+      { status: 500 }
+    );
+  }
+
+  const token = await createSession({
+    email: cleanEmail,
+    name: String(name || cleanEmail).trim().slice(0, 120),
+    plan: "trial",
+    trialEndsAt,
+  });
   const res = NextResponse.json({ ok: true, trialEndsAt, days: TRIAL_DAYS });
   res.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,

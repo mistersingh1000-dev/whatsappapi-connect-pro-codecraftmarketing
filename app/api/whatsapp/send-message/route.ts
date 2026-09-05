@@ -3,10 +3,12 @@ import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, findUser } from "@/lib/db";
 import { getConversation, addMessage } from "@/lib/chat-db";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
+import { whatsappApiToken } from "@/lib/whatsapp-auth";
 
 export const runtime = "nodejs";
 
-const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || "v21.0";
+const GRAPH_VERSION = process.env.WHATSAPP_API_VERSION || "v26.0";
 
 export async function POST(req: Request) {
   const jar = await cookies();
@@ -31,38 +33,29 @@ export async function POST(req: Request) {
     const user = await findUser(db, session.sub);
     if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
 
-    if (user.plan === "suspended") {
-      return NextResponse.json(
-        { error: "suspended", message: "This account is suspended." },
-        { status: 403 }
-      );
+    const access = accessState(user);
+    if (!access.active) {
+      const denied = paidFeatureError(access);
+      return NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status });
     }
 
-    const expired =
-      user.plan !== "paid" && new Date(user.trial_ends_at).getTime() < Date.now();
-    if (expired) {
-      return NextResponse.json(
-        { error: "trial_expired", message: "Your trial has ended. Upgrade to keep sending." },
-        { status: 402 }
-      );
-    }
-
-    if (!user.wa_token || !user.phone_number_id) {
+    const token = whatsappApiToken(user);
+    if (!token || !user.phone_number_id || user.wa_registered === false) {
       return NextResponse.json(
         {
           error: "whatsapp_not_connected",
-          message: "Connect your WhatsApp number in API Setup first.",
+          message: "Connect and activate your WhatsApp number in API Setup first.",
         },
         { status: 400 }
       );
     }
 
     const waRes = await fetch(
-      `https://graph.facebook.com/${GRAPH_VERSION}/${user.phone_number_id}/messages`,
+      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(user.phone_number_id)}/messages`,
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${user.wa_token}`,
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -70,8 +63,9 @@ export async function POST(req: Request) {
           recipient_type: "individual",
           to: conv.contactPhone,
           type: "text",
-          text: { preview_url: false, body: content },
+          text: { preview_url: false, body: String(content).slice(0, 4096) },
         }),
+        cache: "no-store",
       }
     );
 
@@ -80,14 +74,16 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: "send_failed",
-          message: waData?.error?.message || "WhatsApp rejected the message.",
+          message:
+            waData?.error?.message ||
+            "WhatsApp rejected the message. If the customer-service window has expired, send an approved template to reopen the conversation.",
         },
         { status: 502 }
       );
     }
 
     const waMessageId = waData?.messages?.[0]?.id || null;
-    const msg = await addMessage(db, session.sub, conversationId, "user", content, waMessageId);
+    const msg = await addMessage(db, session.sub, conversationId, "user", String(content), waMessageId);
 
     return NextResponse.json({ message: msg });
   } catch (e: any) {

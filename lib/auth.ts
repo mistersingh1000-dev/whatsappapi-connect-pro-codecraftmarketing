@@ -1,27 +1,41 @@
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
-const secret = new TextEncoder().encode(
-  process.env.AUTH_SECRET || "dev-insecure-secret-change-me-in-production"
-);
-
 export const COOKIE_NAME = "wcp_session";
 export const TRIAL_DAYS = Number(process.env.TRIAL_DAYS || 7);
-export const SESSION_DAYS = 30; // how long a login lasts before re-auth
+export const SESSION_DAYS = 30;
 
 export type Session = JWTPayload & {
-  sub: string; // email
+  sub: string;
   name: string;
   plan: "trial" | "free" | "paid" | "expired";
-  trialEndsAt: string; // ISO snapshot (DB is source of truth when configured)
+  trialEndsAt: string;
 };
 
-// Session lasts SESSION_DAYS so users can log back in (read-only after trial).
+function authSecret(): Uint8Array | null {
+  const configured = process.env.AUTH_SECRET?.trim();
+  if (configured) return new TextEncoder().encode(configured);
+
+  // A deterministic fallback is acceptable only for local development. In
+  // production, missing AUTH_SECRET must never silently create forgeable JWTs.
+  if (process.env.NODE_ENV !== "production") {
+    return new TextEncoder().encode("dev-only-secret-change-before-production");
+  }
+  return null;
+}
+
+export function authConfigured(): boolean {
+  return Boolean(authSecret());
+}
+
 export async function createSession(data: {
   email: string;
   name: string;
   plan?: Session["plan"];
   trialEndsAt: string;
 }) {
+  const secret = authSecret();
+  if (!secret) throw new Error("AUTH_SECRET is not configured");
+
   return new SignJWT({
     name: data.name,
     plan: data.plan ?? "trial",
@@ -36,6 +50,8 @@ export async function createSession(data: {
 
 export async function verifySession(token?: string): Promise<Session | null> {
   if (!token) return null;
+  const secret = authSecret();
+  if (!secret) return null;
   try {
     const { payload } = await jwtVerify(token, secret);
     return payload as Session;

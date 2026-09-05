@@ -5,22 +5,20 @@ import SignupFlow from "@/components/SignupFlow";
 import PricingCards from "@/components/PricingCards";
 import FaqAccordion from "@/components/FaqAccordion";
 import ContactForm from "@/components/ContactForm";
-import Stats from "@/components/Stats";
 import SectionHeading from "@/components/SectionHeading";
 import Reveal from "@/components/Reveal";
 import { Icon } from "@/components/Icons";
 
 const trust = [
-  "Meta Embedded Signup",
-  "Official API Integration",
-  "Instant Activation",
-  "24/7 Support",
+  "Meta Cloud API integration",
+  "Customer-owned WhatsApp accounts",
+  "Signed webhook processing",
+  "Dashboard & conversation inbox",
 ];
 
 export default function HomePage() {
   return (
     <>
-      {/* ---------------- HERO ---------------- */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-radial-glow" />
         <div className="pointer-events-none absolute inset-0 -z-10 bg-grid-dark [mask-image:radial-gradient(70%_50%_at_50%_0%,black,transparent)] [background-size:42px_42px]" />
@@ -29,19 +27,19 @@ export default function HomePage() {
             <Reveal>
               <span className="eyebrow">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald" />
-                Official Business Solution Provider
+                WhatsApp Business Platform integration
               </span>
             </Reveal>
             <Reveal delay={80}>
               <h1 className="mt-5 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
-                Official <span className="gradient-text">WhatsApp Business API</span> Provider
+                Manage customer conversations on the <span className="gradient-text">official WhatsApp Cloud API</span>
               </h1>
             </Reveal>
             <Reveal delay={160}>
               <p className="muted mt-5 max-w-xl text-base leading-relaxed sm:text-lg">
-                Send bulk messages, marketing campaigns, OTPs, notifications and customer-support
-                messages through the official WhatsApp Business API — compliant, opt-in, and built
-                so your number stays safe.
+                Connect a business-owned WhatsApp account, receive messages and delivery events,
+                manage contacts and conversations, and send compliant customer-support or approved
+                template messages from one dashboard.
               </p>
             </Reveal>
             <Reveal delay={240}>
@@ -71,72 +69,62 @@ export default function HomePage() {
           </Reveal>
         </div>
 
-        {/* logo marquee */}
         <div className="border-y py-5" style={{ borderColor: "var(--line)" }}>
           <div className="container-px flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm muted">
-            <span className="text-xs uppercase tracking-[0.18em]">Powered by Meta Cloud API</span>
+            <span className="text-xs uppercase tracking-[0.18em]">Built on Meta Cloud API</span>
             <span className="hidden h-4 w-px bg-current opacity-20 sm:block" />
             <span>Webhooks</span>
-            <span>Template Messages</span>
-            <span>Razorpay Billing</span>
-            <span>CRM Sync</span>
-            <span>Multi-Agent Inbox</span>
+            <span>Template sending</span>
+            <span>Contacts</span>
+            <span>Conversation inbox</span>
+            <span>Account analytics</span>
           </div>
         </div>
       </section>
 
-      {/* ---------------- STATS ---------------- */}
-      <section className="container-px py-16">
-        <Stats />
-      </section>
-
-      {/* ---------------- FEATURES ---------------- */}
       <section className="container-px py-12">
         <SectionHeading
-          eyebrow="Everything included"
-          title={<>Built for teams that message <span className="gradient-text">at scale</span></>}
-          subtitle="From OTPs to full marketing campaigns — every tool you need on top of the official API."
+          eyebrow="Launch-ready capabilities"
+          title={<>The core tools needed to <span className="gradient-text">connect and support customers</span></>}
+          subtitle="These are the capabilities currently implemented in the platform. Campaign automation, AI workflows and advanced template management can be added as the next product phase."
         />
         <div className="mt-12">
           <FeaturesGrid limit={6} />
         </div>
         <div className="mt-8 text-center">
           <Link href="/features" className="btn-ghost">
-            See all 12 features <Icon.arrow className="h-4 w-4" />
+            See platform capabilities <Icon.arrow className="h-4 w-4" />
           </Link>
         </div>
       </section>
 
-      {/* ---------------- EMBEDDED SIGNUP ---------------- */}
       <section className="container-px py-16">
         <SectionHeading
           eyebrow="Meta Embedded Signup"
-          title="Connect WhatsApp in minutes"
-          subtitle="No PDFs, no waiting on email threads. Onboard with Facebook login right from your dashboard."
+          title="A simpler customer onboarding flow"
+          subtitle="After your Meta Login for Business configuration and required permissions are approved, customers can connect their Business Portfolio and WhatsApp assets from inside the platform."
         />
         <div className="mt-12">
           <SignupFlow />
         </div>
         <div className="mt-8 text-center">
           <Link href="/embedded-signup" className="btn-primary">
-            Try Embedded Signup <Icon.arrow className="h-4 w-4" />
+            Open Embedded Signup <Icon.arrow className="h-4 w-4" />
           </Link>
         </div>
       </section>
 
-      {/* ---------------- PRICING ---------------- */}
       <section className="container-px py-16">
         <SectionHeading
-          eyebrow="Simple pricing"
-          title="Choose your perfect plan"
-          subtitle="One rate, no per-message markup surprises. Buy a plan, get your login, and you're live."
+          eyebrow="Platform pricing"
+          title="Choose your plan"
+          subtitle="Platform subscription pricing is separate from any usage or conversation charges billed under Meta's WhatsApp Business Platform pricing."
         />
         <div className="mt-12">
           <PricingCards />
         </div>
       </section>
 
-      {/* ---------------- FAQ ---------------- */}
       <section className="container-px py-16">
         <SectionHeading eyebrow="FAQ" title="Questions, answered" />
         <div className="mt-12">
@@ -144,7 +132,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ---------------- CONTACT ---------------- */}
       <section className="container-px py-16">
         <div className="grid items-center gap-10 lg:grid-cols-2">
           <div>
@@ -152,17 +139,17 @@ export default function HomePage() {
               center={false}
               eyebrow="Talk to us"
               title="Request a demo"
-              subtitle="Tell us about your use case and we'll get you live on the official API fast."
+              subtitle="Tell us about your business and WhatsApp use case. We can guide you through the account, number and onboarding requirements."
             />
             <div className="mt-6 space-y-3 text-sm">
               <p className="flex items-center gap-3">
-                <Icon.whatsapp className="h-5 w-5 text-emerald" /> Chat anytime via the WhatsApp button
+                <Icon.whatsapp className="h-5 w-5 text-emerald" /> WhatsApp onboarding support
               </p>
               <p className="flex items-center gap-3">
-                <Icon.shield className="h-5 w-5 text-emerald" /> Official, compliant, ban-safe messaging
+                <Icon.shield className="h-5 w-5 text-emerald" /> Official Meta Cloud API integration
               </p>
               <p className="flex items-center gap-3">
-                <Icon.bolt className="h-5 w-5 text-emerald" /> Activation in minutes, not days
+                <Icon.bolt className="h-5 w-5 text-emerald" /> Guided API and webhook setup
               </p>
             </div>
           </div>

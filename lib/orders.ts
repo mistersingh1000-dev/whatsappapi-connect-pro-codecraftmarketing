@@ -1,17 +1,17 @@
-// Manual UPI orders: customer pays by QR, you approve in the admin panel.
+// Manual UPI orders: customer pays by QR, admin approves in the dashboard.
 import type { Firestore } from "firebase-admin/firestore";
 
 export type OrderStatus = "pending" | "approved" | "rejected";
 
 export type Order = {
   id: string;
-  userId: string;        // customer email
+  userId: string;
   userName: string | null;
   planId: string;
   planName: string;
-  amount: number;        // rupees
-  months: number;        // how long it extends access
-  reference: string;     // UPI transaction / UTR number the customer typed
+  amount: number;
+  months: number;
+  reference: string;
   payerNote: string | null;
   status: OrderStatus;
   createdAt: string;
@@ -20,6 +20,7 @@ export type Order = {
 };
 
 const ORDERS = "orders";
+const USERS = "users";
 
 export async function createOrder(
   db: Firestore,
@@ -43,6 +44,19 @@ export async function getOrder(db: Firestore, id: string): Promise<Order | null>
   return snap.exists ? (snap.data() as Order) : null;
 }
 
+export async function findOrderByReference(
+  db: Firestore,
+  reference: string
+): Promise<Order | null> {
+  const snap = await db
+    .collection(ORDERS)
+    .where("reference", "==", reference.trim())
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  return snap.docs[0].data() as Order;
+}
+
 // Most recent pending order for a customer — drives the "under process" banner.
 export async function pendingOrderFor(db: Firestore, userId: string): Promise<Order | null> {
   const snap = await db
@@ -59,7 +73,6 @@ export async function pendingOrderFor(db: Firestore, userId: string): Promise<Or
 export async function listOrders(db: Firestore): Promise<Order[]> {
   const snap = await db.collection(ORDERS).get();
   const rows = snap.docs.map((d) => d.data() as Order);
-  // Pending first, then newest.
   rows.sort((a, b) => {
     if (a.status === "pending" && b.status !== "pending") return -1;
     if (b.status === "pending" && a.status !== "pending") return 1;
@@ -75,9 +88,70 @@ export async function decideOrder(
   decidedBy: string
 ): Promise<Order | null> {
   const ref = db.collection(ORDERS).doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) return null;
-  await ref.update({ status, decidedAt: new Date().toISOString(), decidedBy });
-  const after = await ref.get();
-  return after.data() as Order;
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const order = snap.data() as Order;
+    if (order.status !== "pending") {
+      throw new Error("already_decided");
+    }
+    const updates = {
+      status,
+      decidedAt: new Date().toISOString(),
+      decidedBy,
+    };
+    tx.update(ref, updates);
+    return { ...order, ...updates } as Order;
+  });
+}
+
+// Atomically mark a pending order approved AND extend the user's access.
+// This prevents a network/database failure from extending the same order twice.
+export async function approveOrderAndExtend(
+  db: Firestore,
+  id: string,
+  decidedBy: string
+): Promise<{ order: Order; validUntil: string } | null> {
+  const orderRef = db.collection(ORDERS).doc(id);
+
+  return db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists) return null;
+
+    const order = orderSnap.data() as Order;
+    if (order.status !== "pending") {
+      throw new Error("already_decided");
+    }
+
+    const userRef = db.collection(USERS).doc(String(order.userId).trim().toLowerCase());
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) {
+      throw new Error("user_not_found");
+    }
+
+    const user = userSnap.data() as any;
+    const now = new Date();
+    const currentExpiry = new Date(user?.trial_ends_at || 0);
+    const base = currentExpiry > now ? currentExpiry : now;
+    base.setMonth(base.getMonth() + order.months);
+    const validUntil = base.toISOString();
+    const decidedAt = new Date().toISOString();
+
+    tx.update(userRef, { plan: "paid", trial_ends_at: validUntil });
+    tx.update(orderRef, {
+      status: "approved",
+      decidedAt,
+      decidedBy,
+    });
+
+    return {
+      order: {
+        ...order,
+        status: "approved",
+        decidedAt,
+        decidedBy,
+      },
+      validUntil,
+    };
+  });
 }
