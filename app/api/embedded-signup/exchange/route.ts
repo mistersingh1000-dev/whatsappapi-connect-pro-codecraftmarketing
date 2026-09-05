@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, updateUser } from "@/lib/db";
 import { encryptCredential } from "@/lib/credential-crypto";
+import { provisionProviderAccess, providerModeEnabled } from "@/lib/meta-provider";
 
 export const runtime = "nodejs";
 
@@ -63,6 +64,7 @@ export async function POST(req: Request) {
     );
   }
 
+  let phoneDetails: any = null;
   try {
     const verifyRes = await fetch(
       `https://graph.facebook.com/${version}/${encodeURIComponent(String(phone_number_id))}?fields=id,display_phone_number,verified_name`,
@@ -75,9 +77,28 @@ export async function POST(req: Request) {
         { status: 502 }
       );
     }
+    phoneDetails = verifyData;
   } catch {
     return NextResponse.json(
       { error: "asset_verification_failed", message: "Could not verify the connected WhatsApp number." },
+      { status: 502 }
+    );
+  }
+
+  // In Tech Provider mode, complete the provider-side WABA assignment and,
+  // when explicitly enabled, provider credit-line attachment before we mark
+  // the onboarding as successful. Basic/manual mode does not require this.
+  const provider = await provisionProviderAccess(String(waba_id));
+  if (providerModeEnabled() && provider.errors.length) {
+    return NextResponse.json(
+      {
+        error: "provider_provisioning_failed",
+        message: provider.errors[0],
+        provider: {
+          systemUserAssigned: provider.systemUserAssigned,
+          creditLineAttached: provider.creditLineAttached,
+        },
+      },
       { status: 502 }
     );
   }
@@ -119,9 +140,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "user_not_found" }, { status: 404 });
   }
 
-  // Meta requires Cloud API phone registration and a 6-digit two-step PIN.
-  // Generate and store the PIN server-side so customers do not have to manage
-  // another technical credential during onboarding.
   try {
     const registerRes = await fetch(
       `https://graph.facebook.com/${version}/${encodeURIComponent(String(phone_number_id))}/register`,
@@ -149,6 +167,13 @@ export async function POST(req: Request) {
         registered: true,
         waba_id: String(waba_id),
         phone_number_id: String(phone_number_id),
+        display_phone_number: phoneDetails?.display_phone_number || null,
+        verified_name: phoneDetails?.verified_name || null,
+        provider: {
+          enabled: provider.enabled,
+          systemUserAssigned: provider.systemUserAssigned,
+          creditLineAttached: provider.creditLineAttached,
+        },
       });
     }
 
@@ -168,6 +193,13 @@ export async function POST(req: Request) {
         message,
         waba_id: String(waba_id),
         phone_number_id: String(phone_number_id),
+        display_phone_number: phoneDetails?.display_phone_number || null,
+        verified_name: phoneDetails?.verified_name || null,
+        provider: {
+          enabled: provider.enabled,
+          systemUserAssigned: provider.systemUserAssigned,
+          creditLineAttached: provider.creditLineAttached,
+        },
       },
       { status: 202 }
     );
@@ -185,6 +217,11 @@ export async function POST(req: Request) {
         message,
         waba_id: String(waba_id),
         phone_number_id: String(phone_number_id),
+        provider: {
+          enabled: provider.enabled,
+          systemUserAssigned: provider.systemUserAssigned,
+          creditLineAttached: provider.creditLineAttached,
+        },
       },
       { status: 202 }
     );
