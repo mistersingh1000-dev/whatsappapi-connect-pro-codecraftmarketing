@@ -3,9 +3,10 @@ import { findUser } from "@/lib/db";
 import { accessState } from "@/lib/entitlements";
 import { whatsappApiToken } from "@/lib/whatsapp-auth";
 import {
+  claimQueuedRecipients,
   getCampaign,
-  nextQueuedRecipients,
   refreshCampaignCounts,
+  requeueStaleProcessingRecipients,
   updateCampaign,
   updateRecipient,
 } from "@/lib/marketing-db";
@@ -87,7 +88,8 @@ export async function processCampaignBatch(
   const token = whatsappApiToken(user);
   if (!token) throw new Error("credential_error");
 
-  const recipients = await nextQueuedRecipients(db, campaignId, batchSize);
+  await requeueStaleProcessingRecipients(db, campaignId, 10);
+  const recipients = await claimQueuedRecipients(db, campaignId, batchSize);
   if (!recipients.length) return refreshCampaignCounts(db, campaignId);
 
   await updateCampaign(db, campaignId, { status: "sending" });
