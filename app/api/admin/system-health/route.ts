@@ -9,6 +9,14 @@ function configured(name: string): boolean {
   return Boolean(process.env[name]?.trim());
 }
 
+function databaseReady(): boolean {
+  try {
+    return Boolean(getDb());
+  } catch {
+    return false;
+  }
+}
+
 export async function GET() {
   const jar = await cookies();
   const session = await verifySession(jar.get(COOKIE_NAME)?.value);
@@ -33,7 +41,7 @@ export async function GET() {
     {
       id: "firebase",
       label: "Firebase service account",
-      configured: firebaseConfigured && Boolean(getDb()),
+      configured: firebaseConfigured && databaseReady(),
       required: true,
       help: "Required for users, conversations, contacts, orders and account settings.",
     },
