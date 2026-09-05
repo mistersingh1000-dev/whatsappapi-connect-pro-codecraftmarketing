@@ -27,6 +27,19 @@ export function providerCreditLineEnabled(): boolean {
   return enabled("META_PROVIDER_CREDIT_LINE_ENABLED");
 }
 
+export function providerMessagingToken(): string | null {
+  return providerModeEnabled() ? process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim() || null : null;
+}
+
+export function providerAdminToken(): string | null {
+  if (!providerModeEnabled()) return null;
+  return (
+    process.env.META_ADMIN_SYSTEM_USER_ACCESS_TOKEN?.trim() ||
+    process.env.META_SYSTEM_USER_ACCESS_TOKEN?.trim() ||
+    null
+  );
+}
+
 export async function provisionProviderAccess(wabaId: string): Promise<ProvisionResult> {
   if (!providerModeEnabled()) {
     return {
@@ -39,25 +52,26 @@ export async function provisionProviderAccess(wabaId: string): Promise<Provision
 
   const version = metaVersion();
   const systemUserId = process.env.META_SYSTEM_USER_ID;
-  const providerToken = process.env.META_SYSTEM_USER_ACCESS_TOKEN;
+  const adminToken = providerAdminToken();
+  const messagingToken = providerMessagingToken();
   const providerBusinessId = process.env.META_BUSINESS_ID;
   const errors: string[] = [];
   let systemUserAssigned = false;
   let creditLineAttached: boolean | null = null;
 
-  if (!systemUserId || !providerToken || !providerBusinessId) {
+  if (!systemUserId || !adminToken || !messagingToken || !providerBusinessId) {
     return {
       enabled: true,
       systemUserAssigned: false,
       creditLineAttached: providerCreditLineEnabled() ? false : null,
       errors: [
-        "Provider mode is enabled but META_BUSINESS_ID, META_SYSTEM_USER_ID or META_SYSTEM_USER_ACCESS_TOKEN is missing.",
+        "Provider mode is enabled but META_BUSINESS_ID, META_SYSTEM_USER_ID, META_SYSTEM_USER_ACCESS_TOKEN or the provider admin token is missing.",
       ],
     };
   }
 
-  // Official Embedded Signup provider flow: assign the provider's system user
-  // to the customer's WABA with MANAGE access, then verify the assignment.
+  // Meta's Embedded Signup provider flow uses an Admin System User token to
+  // assign the provider's messaging system user to the customer's WABA.
   const assignParams = new URLSearchParams({
     user: systemUserId,
     tasks: JSON.stringify(["MANAGE"]),
@@ -66,7 +80,7 @@ export async function provisionProviderAccess(wabaId: string): Promise<Provision
     `https://graph.facebook.com/${version}/${encodeURIComponent(wabaId)}/assigned_users?${assignParams.toString()}`,
     {
       method: "POST",
-      headers: { Authorization: `Bearer ${providerToken}` },
+      headers: { Authorization: `Bearer ${adminToken}` },
     }
   );
 
@@ -79,7 +93,7 @@ export async function provisionProviderAccess(wabaId: string): Promise<Provision
     const verifyParams = new URLSearchParams({ business: providerBusinessId });
     const verify = await graphJson(
       `https://graph.facebook.com/${version}/${encodeURIComponent(wabaId)}/assigned_users?${verifyParams.toString()}`,
-      { headers: { Authorization: `Bearer ${providerToken}` } }
+      { headers: { Authorization: `Bearer ${adminToken}` } }
     );
     if (!verify.res.ok) {
       errors.push(
@@ -101,11 +115,9 @@ export async function provisionProviderAccess(wabaId: string): Promise<Provision
     if (!creditLineId) {
       errors.push("Provider credit-line mode is enabled but META_CREDIT_LINE_ID is missing.");
     } else {
-      // Currency belongs to the customer's WABA and is required by Meta when
-      // attaching a provider credit line.
       const waba = await graphJson(
         `https://graph.facebook.com/${version}/${encodeURIComponent(wabaId)}?fields=id,currency`,
-        { headers: { Authorization: `Bearer ${providerToken}` } }
+        { headers: { Authorization: `Bearer ${messagingToken}` } }
       );
       const currency = waba.data?.currency;
       if (!waba.res.ok || !currency) {
@@ -121,7 +133,7 @@ export async function provisionProviderAccess(wabaId: string): Promise<Provision
           `https://graph.facebook.com/${version}/${encodeURIComponent(creditLineId)}/whatsapp_credit_sharing_and_attach?${creditParams.toString()}`,
           {
             method: "POST",
-            headers: { Authorization: `Bearer ${providerToken}` },
+            headers: { Authorization: `Bearer ${adminToken}` },
           }
         );
         if (!credit.res.ok) {
