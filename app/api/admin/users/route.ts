@@ -21,8 +21,8 @@ export async function GET() {
 
   try {
     const users = await listUsers(db);
-    // Never expose password hashes or tokens to the admin UI.
-    const safe = users.map(({ password_hash, wa_token, ...rest }) => rest);
+    // Never expose password hashes, WhatsApp access tokens, or registration PINs to the admin UI.
+    const safe = users.map(({ password_hash, wa_token, wa_registration_pin, ...rest }) => rest);
     return NextResponse.json({ users: safe });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "list_failed" }, { status: 500 });
