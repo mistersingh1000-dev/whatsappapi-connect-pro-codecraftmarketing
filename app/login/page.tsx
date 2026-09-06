@@ -35,13 +35,12 @@ function LoginInner() {
           <Icon.whatsapp className="h-6 w-6 text-white" />
         </span>
         <h1 className="mt-4 font-display text-2xl font-bold">Welcome back</h1>
-        <p className="muted mt-2 text-sm">Log in to your WhatsApp Connect Pro dashboard.</p>
+        <p className="muted mt-2 text-sm">Sign in to your WhatsApp Connect Pro dashboard.</p>
       </div>
 
       {expired && (
         <div className="mb-4 rounded-2xl border border-tick/40 bg-tick/[0.06] px-4 py-3 text-sm">
-          Your free trial has ended and you've been disconnected. Upgrade to a paid plan to
-          reconnect your number.
+          Your trial or subscription has ended. Your WhatsApp connection and data remain saved, but outbound sending, campaigns and automations are locked until you upgrade.
         </div>
       )}
 
@@ -54,15 +53,24 @@ function LoginInner() {
           <label className="mb-1.5 block text-sm font-medium">Password</label>
           <input className="field" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
         </div>
-        <button type="submit" className="btn-primary w-full">Log in to dashboard</button>
+        <button type="submit" className="btn-primary w-full">Sign in to dashboard</button>
         {msg && (
           <p className="rounded-xl border border-emerald/30 bg-emerald/[0.06] px-3 py-2.5 text-xs">{msg}</p>
         )}
+
+        <div className="flex items-center gap-3 py-1">
+          <span className="h-px flex-1 bg-white/10" />
+          <span className="muted text-xs">New customer?</span>
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
+
+        <Link href="/signup" className="btn-ghost block w-full text-center">
+          Create Account — Start 7-Day Free Trial
+        </Link>
       </form>
 
-      <p className="muted mt-5 text-center text-sm">
-        New here?{" "}
-        <Link href="/signup" className="font-medium text-emerald hover:underline">Start your 7-day free trial</Link>
+      <p className="muted mt-5 text-center text-xs">
+        No credit card required to create your trial account.
       </p>
     </div>
   );
