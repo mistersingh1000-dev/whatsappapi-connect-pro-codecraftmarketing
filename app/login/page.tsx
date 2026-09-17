@@ -50,7 +50,10 @@ function LoginInner() {
           <input className="field" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Password</label>
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <label className="block text-sm font-medium">Password</label>
+            <Link href="/forgot-password" className="text-xs font-medium text-emerald hover:underline">Forgot password?</Link>
+          </div>
           <input className="field" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
         </div>
         <button type="submit" className="btn-primary w-full">Sign in to dashboard</button>
