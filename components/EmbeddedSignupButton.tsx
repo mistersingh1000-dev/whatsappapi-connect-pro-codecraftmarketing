@@ -126,9 +126,7 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
 
   const launch = () => {
     if (!ready || !window.FB) {
-      setStatus(
-        "One-click signup is not configured yet. Add the Meta App ID and Embedded Signup Configuration ID in Vercel."
-      );
+      setStatus("Meta one-click onboarding is not available yet. Please contact support.");
       return;
     }
 
@@ -151,7 +149,12 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
         auth_type: "rerequest",
         response_type: "code",
         override_default_response_type: true,
-        extras: { setup: {} },
+        extras: {
+          setup: {},
+          // Current Embedded Signup session event schema. The configuration ID
+          // itself determines the WhatsApp Embedded Signup variation in Meta.
+          sessionInfoVersion: "3",
+        },
       }
     );
   };
@@ -162,14 +165,14 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
         <div>
           <h3 className="font-display text-lg font-semibold">Connect with Meta</h3>
           <p className="muted mt-1 text-sm">
-            The Meta-hosted flow lets the customer choose the correct Business Portfolio,
+            The Meta-hosted flow lets you choose or create the correct Business Portfolio,
             WhatsApp Business Account and phone number without copying API credentials.
           </p>
         </div>
         <button
           onClick={launch}
           disabled={!ready}
-          title={ready ? undefined : "Meta Embedded Signup is not configured yet"}
+          title={ready ? undefined : "Meta Embedded Signup is being configured"}
           className="btn-primary shrink-0 bg-[#1877F2] bg-none text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Icon.facebook className="h-5 w-5" />
@@ -185,11 +188,9 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
 
       {!ready && (
         <div className="mt-5 rounded-2xl border border-amber-500/40 bg-amber-500/[0.07] px-4 py-3">
-          <p className="text-sm font-semibold text-amber-300">One-click signup needs Meta setup</p>
+          <p className="text-sm font-semibold text-amber-300">Meta one-click onboarding is being configured</p>
           <p className="muted mt-1.5 text-sm leading-relaxed">
-            Add NEXT_PUBLIC_META_APP_ID and NEXT_PUBLIC_META_CONFIG_ID in Vercel after creating the
-            Facebook Login for Business / Embedded Signup configuration. Manual Cloud API
-            credentials can still be connected while Meta App Review is pending.
+            Your administrator must finish the Meta Business app and Embedded Signup configuration before this button can be enabled. Once enabled, onboarding happens securely inside Meta without asking you to copy API credentials.
           </p>
         </div>
       )}
