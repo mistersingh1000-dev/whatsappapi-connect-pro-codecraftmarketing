@@ -29,13 +29,10 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
   const saveIfReady = useCallback(async () => {
     const code = codeRef.current;
     const { waba_id, phone_number_id } = signupRef.current;
-
-    // Meta returns the authorization code and WA_EMBEDDED_SIGNUP FINISH event
-    // independently. Wait until both have arrived before calling the backend.
     if (!code || !waba_id || !phone_number_id || submittingRef.current) return;
 
     submittingRef.current = true;
-    setStatus("Finishing your WhatsApp connection…");
+    setStatus("Finishing your WhatsApp API connection…");
 
     try {
       const res = await fetch("/api/embedded-signup/exchange", {
@@ -48,20 +45,20 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
       if (!res.ok) {
         setStatus(
           data?.message ||
-            "Meta completed signup, but the API provisioning step failed. Please check the Meta configuration and try again."
+            "Meta completed signup, but the final API provisioning step failed. Please contact support before retrying with the same number."
         );
         return;
       }
 
       if (data?.registered === true) {
-        setStatus("Connected ✓ Meta signup, webhook subscription and phone registration are complete.");
+        setStatus("Connected ✓ Your WhatsApp Business Account, phone number and webhook are connected.");
       } else if (data?.needsRegistration) {
         setStatus(
           data?.message ||
             "Meta signup is complete, but final phone activation is still pending. Your dashboard will show the current status."
         );
       } else {
-        setStatus("Meta signup completed. Checking activation status in your dashboard…");
+        setStatus("Meta signup completed. Checking activation status…");
       }
       onConnected?.();
     } catch {
@@ -108,7 +105,7 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
             signupRef.current = { waba_id, phone_number_id };
             void saveIfReady();
           } else {
-            setStatus("Meta finished signup but did not return the WhatsApp account IDs. Please retry.");
+            setStatus("Meta finished signup but did not return the WhatsApp account IDs. Please contact support before retrying.");
           }
         } else if (data?.event === "CANCEL") {
           setStatus("Signup was cancelled before completion.");
@@ -116,7 +113,7 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
           setStatus(data?.data?.error_message || "Meta reported an Embedded Signup error.");
         }
       } catch {
-        // Ignore unrelated postMessage traffic.
+        // Ignore unrelated browser postMessage traffic.
       }
     };
 
@@ -126,14 +123,14 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
 
   const launch = () => {
     if (!ready || !window.FB) {
-      setStatus("Meta one-click onboarding is not available yet. Please contact support.");
+      setStatus("Meta Embedded Signup is not enabled yet. Please contact support.");
       return;
     }
 
     codeRef.current = null;
     signupRef.current = {};
     submittingRef.current = false;
-    setStatus("Opening Meta Embedded Signup…");
+    setStatus("Opening Meta's secure WhatsApp signup…");
 
     window.FB.login(
       (response: any) => {
@@ -151,8 +148,6 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
         override_default_response_type: true,
         extras: {
           setup: {},
-          // Current Embedded Signup session event schema. The configuration ID
-          // itself determines the WhatsApp Embedded Signup variation in Meta.
           sessionInfoVersion: "3",
         },
       }
@@ -160,23 +155,22 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
   };
 
   return (
-    <div className="card p-6 sm:p-8">
+    <div className="rounded-2xl border p-6 sm:p-8" style={{ borderColor: "var(--line)" }}>
       <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="font-display text-lg font-semibold">Connect with Meta</h3>
-          <p className="muted mt-1 text-sm">
-            The Meta-hosted flow lets you choose or create the correct Business Portfolio,
-            WhatsApp Business Account and phone number without copying API credentials.
+          <h3 className="font-display text-lg font-semibold">Meta WhatsApp Embedded Signup</h3>
+          <p className="muted mt-1 max-w-2xl text-sm leading-relaxed">
+            A secure Meta popup will open so you can select or create your Business Portfolio, WhatsApp Business Account and phone number.
           </p>
         </div>
         <button
           onClick={launch}
           disabled={!ready}
-          title={ready ? undefined : "Meta Embedded Signup is being configured"}
+          title={ready ? "Open Meta Embedded Signup" : "Meta Embedded Signup is being configured"}
           className="btn-primary shrink-0 bg-[#1877F2] bg-none text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Icon.facebook className="h-5 w-5" />
-          Continue with Facebook
+          Connect WhatsApp
         </button>
       </div>
 
@@ -188,9 +182,9 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
 
       {!ready && (
         <div className="mt-5 rounded-2xl border border-amber-500/40 bg-amber-500/[0.07] px-4 py-3">
-          <p className="text-sm font-semibold text-amber-300">Meta one-click onboarding is being configured</p>
+          <p className="text-sm font-semibold text-amber-300">Meta Embedded Signup is not enabled yet</p>
           <p className="muted mt-1.5 text-sm leading-relaxed">
-            Your administrator must finish the Meta Business app and Embedded Signup configuration before this button can be enabled. Once enabled, onboarding happens securely inside Meta without asking you to copy API credentials.
+            The site administrator must complete the Meta Business app and Embedded Signup configuration first. Once enabled, this button opens the official Meta popup directly.
           </p>
         </div>
       )}
