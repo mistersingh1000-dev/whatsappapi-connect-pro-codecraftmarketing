@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, listUsers } from "@/lib/db";
+import { getAdminSession } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const jar = await cookies();
-  const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-
-  const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mistersingh1000@gmail.com").toLowerCase();
-  if (!session || session.sub.toLowerCase() !== ADMIN_EMAIL) {
+  const session = await getAdminSession();
+  if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
 
@@ -21,7 +17,6 @@ export async function GET() {
 
   try {
     const users = await listUsers(db);
-    // Never expose password hashes, WhatsApp access tokens, or registration PINs to the admin UI.
     const safe = users.map(({ password_hash, wa_token, wa_registration_pin, ...rest }) => rest);
     return NextResponse.json({ users: safe });
   } catch (e: any) {
