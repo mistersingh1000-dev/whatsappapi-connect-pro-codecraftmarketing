@@ -16,6 +16,8 @@ type Campaign = {
   name: string;
   templateName: string;
   templateLanguage: string;
+  audience?: "all_opted_in" | "tag";
+  audienceTag?: string | null;
   status: string;
   totalRecipients: number;
   sentCount: number;
@@ -25,7 +27,11 @@ type Campaign = {
   createdAt: string;
 };
 
-type Contact = { marketingOptIn?: boolean; doNotMessage?: boolean };
+type Contact = {
+  marketingOptIn?: boolean;
+  doNotMessage?: boolean;
+  tags?: string[];
+};
 
 function bodyText(template?: Template): string {
   return template?.components?.find((c) => String(c.type).toUpperCase() === "BODY")?.text || "";
@@ -40,6 +46,7 @@ export default function CampaignManager() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [readOnly, setReadOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -49,16 +56,30 @@ export default function CampaignManager() {
     name: "",
     templateKey: "",
     variableValues: [] as string[],
+    audience: "all_opted_in" as "all_opted_in" | "tag",
+    audienceTag: "",
   });
 
   const approvedTemplates = useMemo(
     () => templates.filter((t) => String(t.status).toUpperCase() === "APPROVED"),
     [templates]
   );
-  const optedIn = useMemo(
-    () => contacts.filter((c) => c.marketingOptIn === true && c.doNotMessage !== true).length,
+  const eligibleContacts = useMemo(
+    () => contacts.filter((c) => c.marketingOptIn === true && c.doNotMessage !== true),
     [contacts]
   );
+  const optedIn = eligibleContacts.length;
+  const availableTags = useMemo(
+    () => Array.from(new Set(eligibleContacts.flatMap((c) => c.tags || []))).sort((a, b) => a.localeCompare(b)),
+    [eligibleContacts]
+  );
+  const audienceCount = useMemo(() => {
+    if (form.audience !== "tag") return optedIn;
+    const target = form.audienceTag.trim().toLowerCase();
+    return eligibleContacts.filter((c) =>
+      (c.tags || []).some((tag) => String(tag).trim().toLowerCase() === target)
+    ).length;
+  }, [eligibleContacts, form.audience, form.audienceTag, optedIn]);
   const selectedTemplate = useMemo(
     () => approvedTemplates.find((t) => `${t.name}::${t.language}` === form.templateKey),
     [approvedTemplates, form.templateKey]
@@ -81,7 +102,10 @@ export default function CampaignManager() {
       if (tRes.ok) setTemplates(t.templates || []);
       if (cRes.ok) setCampaigns(c.campaigns || []);
       if (contactRes.ok) setContacts(ct.contacts || []);
+      setReadOnly(c?.readOnly === true || t?.readOnly === true || ct?.readOnly === true);
       if (!tRes.ok) setError(t?.message || "Templates could not be loaded. Connect WhatsApp first.");
+      else if (!cRes.ok) setError(c?.message || c?.error || "Campaigns could not be loaded.");
+      else if (!contactRes.ok) setError(ct?.message || ct?.error || "Contacts could not be loaded.");
     } finally {
       setLoading(false);
     }
@@ -100,7 +124,7 @@ export default function CampaignManager() {
   }, [vars, form.templateKey]);
 
   const createCampaign = async () => {
-    if (!selectedTemplate) return;
+    if (readOnly || !selectedTemplate) return;
     setBusy("create");
     setError("");
     setSuccess("");
@@ -113,14 +137,16 @@ export default function CampaignManager() {
           templateName: selectedTemplate.name,
           templateLanguage: selectedTemplate.language,
           variableValues: form.variableValues,
+          audience: form.audience,
+          audienceTag: form.audience === "tag" ? form.audienceTag : null,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || data?.error || "Could not create campaign");
       setCampaigns((rows) => [data.campaign, ...rows]);
       setShowCreate(false);
-      setForm({ name: "", templateKey: "", variableValues: [] });
-      setSuccess("Campaign draft created ✓ Review it, then launch to opted-in contacts.");
+      setForm({ name: "", templateKey: "", variableValues: [], audience: "all_opted_in", audienceTag: "" });
+      setSuccess("Campaign draft created ✓ Review it, then launch to the selected opted-in audience.");
     } catch (e: any) {
       setError(e?.message || "Could not create campaign");
     } finally {
@@ -136,9 +162,7 @@ export default function CampaignManager() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || data?.error || "Campaign processing stopped");
       campaign = data.campaign;
-      if (campaign) {
-        setCampaigns((rows) => rows.map((c) => (c.id === campaignId ? campaign! : c)));
-      }
+      if (campaign) setCampaigns((rows) => rows.map((c) => (c.id === campaignId ? campaign! : c)));
       if (campaign && ["completed", "completed_with_errors", "cancelled"].includes(campaign.status)) break;
       await new Promise((resolve) => window.setTimeout(resolve, 250));
     }
@@ -146,6 +170,7 @@ export default function CampaignManager() {
   };
 
   const launch = async (campaignId: string) => {
+    if (readOnly) return;
     setBusy(campaignId);
     setError("");
     setSuccess("");
@@ -153,15 +178,9 @@ export default function CampaignManager() {
       const res = await fetch(`/api/whatsapp/campaigns/${encodeURIComponent(campaignId)}/launch`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || data?.error || "Could not launch campaign");
-      if (data.campaign) {
-        setCampaigns((rows) => rows.map((c) => (c.id === campaignId ? data.campaign : c)));
-      }
+      if (data.campaign) setCampaigns((rows) => rows.map((c) => (c.id === campaignId ? data.campaign : c)));
       const finalCampaign = await processUntilDone(campaignId, data.campaign);
-      setSuccess(
-        finalCampaign?.status === "completed"
-          ? "Campaign completed ✓"
-          : "Campaign finished. Check failed recipients and Meta status before retrying anything."
-      );
+      setSuccess(finalCampaign?.status === "completed" ? "Campaign completed ✓" : "Campaign finished. Check failed recipients and Meta status before retrying anything.");
       await load();
     } catch (e: any) {
       setError(e?.message || "Campaign stopped");
@@ -171,6 +190,7 @@ export default function CampaignManager() {
   };
 
   const resume = async (campaignId: string) => {
+    if (readOnly) return;
     setBusy(campaignId);
     setError("");
     try {
@@ -188,160 +208,68 @@ export default function CampaignManager() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="font-display text-3xl font-bold">Broadcast Campaigns</h1>
-          <p className="muted mt-2 max-w-2xl text-sm leading-relaxed">
-            Send Meta-approved WhatsApp templates only to contacts whose marketing consent is recorded in your CRM.
-          </p>
+          <p className="muted mt-2 max-w-2xl text-sm leading-relaxed">Send Meta-approved WhatsApp templates to recorded opt-in contacts, with optional tag segmentation.</p>
           <div className="mt-4 flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-emerald/12 px-3 py-1.5 text-emerald">{optedIn} eligible contacts</span>
             <span className="rounded-full border px-3 py-1.5" style={{ borderColor: "var(--line)" }}>{approvedTemplates.length} approved templates</span>
+            <span className="rounded-full border px-3 py-1.5" style={{ borderColor: "var(--line)" }}>{availableTags.length} audience tags</span>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href="/dashboard/contacts" className="btn-ghost">Manage Consent</Link>
           <Link href="/dashboard/templates" className="btn-ghost">Templates</Link>
-          <button onClick={() => setShowCreate((v) => !v)} className="btn-primary">
-            {showCreate ? "Cancel" : "New Campaign"}
-          </button>
+          {!readOnly && <button onClick={() => setShowCreate((v) => !v)} className="btn-primary">{showCreate ? "Cancel" : "New Campaign"}</button>}
         </div>
       </div>
 
+      {readOnly && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/[0.07] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="font-medium text-amber-200">Campaign sending is locked</p><p className="muted mt-1 text-xs">Existing campaign history stays visible. Renew your subscription to create, launch or resume broadcasts.</p></div>
+          <Link href="/pricing" className="btn-primary shrink-0 text-xs">Renew subscription</Link>
+        </div>
+      )}
+
       <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4 text-sm">
         <p className="font-medium text-amber-200">Compliance protection is enabled</p>
-        <p className="muted mt-1 text-xs leading-relaxed">
-          Contacts without recorded marketing opt-in, and contacts marked Do Not Message, are automatically excluded. Use only legitimate consented audiences.
-        </p>
+        <p className="muted mt-1 text-xs leading-relaxed">Contacts without recorded marketing opt-in and contacts marked Do Not Message are automatically excluded. Tag segments are filtered after this consent check.</p>
       </div>
 
       {error && <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>}
       {success && <div className="mb-5 rounded-xl border border-emerald/30 bg-emerald/[0.06] p-4 text-sm text-emerald">{success}</div>}
 
-      {showCreate && (
+      {showCreate && !readOnly && (
         <div className="card mb-8 p-6">
           <h2 className="font-display text-lg font-semibold">Create campaign</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Campaign name</label>
-              <input className="field" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="September offer" />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Approved template</label>
-              <select className="field" value={form.templateKey} onChange={(e) => setForm((f) => ({ ...f, templateKey: e.target.value }))}>
-                <option value="">Select template</option>
-                {approvedTemplates.map((t) => (
-                  <option key={`${t.name}-${t.language}`} value={`${t.name}::${t.language}`}>
-                    {t.name} · {t.language} · {t.category}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <div><label className="mb-1.5 block text-sm font-medium">Campaign name</label><input className="field" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="September offer" /></div>
+            <div><label className="mb-1.5 block text-sm font-medium">Approved template</label><select className="field" value={form.templateKey} onChange={(e) => setForm((f) => ({ ...f, templateKey: e.target.value }))}><option value="">Select template</option>{approvedTemplates.map((t) => <option key={`${t.name}-${t.language}`} value={`${t.name}::${t.language}`}>{t.name} · {t.language} · {t.category}</option>)}</select></div>
+            <div><label className="mb-1.5 block text-sm font-medium">Audience</label><select className="field" value={form.audience} onChange={(e) => setForm((f) => ({ ...f, audience: e.target.value as "all_opted_in" | "tag", audienceTag: "" }))}><option value="all_opted_in">All opted-in contacts</option><option value="tag">Opted-in contacts with a tag</option></select></div>
+            {form.audience === "tag" && <div><label className="mb-1.5 block text-sm font-medium">Contact tag</label><select className="field" value={form.audienceTag} onChange={(e) => setForm((f) => ({ ...f, audienceTag: e.target.value }))}><option value="">Select tag</option>{availableTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</select></div>}
           </div>
 
-          {selectedTemplate && (
-            <div className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--line)" }}>
-              <p className="text-xs font-medium muted">Template preview</p>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{bodyText(selectedTemplate) || "Template body not returned by Meta."}</p>
-            </div>
-          )}
+          {selectedTemplate && <div className="mt-5 rounded-xl border p-4" style={{ borderColor: "var(--line)" }}><p className="text-xs font-medium muted">Template preview</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{bodyText(selectedTemplate) || "Template body not returned by Meta."}</p></div>}
 
-          {vars > 0 && (
-            <div className="mt-5">
-              <p className="text-sm font-medium">Body variable mapping</p>
-              <p className="muted mt-1 text-xs">Use fixed text, {"{{name}}"} or {"{{phone}}"}. This first release supports BODY variables.</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {Array.from({ length: vars }, (_, i) => (
-                  <div key={i}>
-                    <label className="mb-1 block text-xs muted">{"{{"}{i + 1}{"}}"}</label>
-                    <input
-                      className="field"
-                      value={form.variableValues[i] || ""}
-                      onChange={(e) => {
-                        const values = [...form.variableValues];
-                        values[i] = e.target.value;
-                        setForm((f) => ({ ...f, variableValues: values }));
-                      }}
-                      placeholder={i === 0 ? "{{name}}" : "Offer text"}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {vars > 0 && <div className="mt-5"><p className="text-sm font-medium">Body variable mapping</p><p className="muted mt-1 text-xs">Use fixed text, {"{{name}}"} or {"{{phone}}"}.</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{Array.from({ length: vars }, (_, i) => <div key={i}><label className="mb-1 block text-xs muted">{"{{"}{i + 1}{"}}"}</label><input className="field" value={form.variableValues[i] || ""} onChange={(e) => { const values = [...form.variableValues]; values[i] = e.target.value; setForm((f) => ({ ...f, variableValues: values })); }} placeholder={i === 0 ? "{{name}}" : "Offer text"} /></div>)}</div></div>}
 
-          <div className="mt-5 rounded-xl bg-emerald/[0.05] p-4 text-xs leading-relaxed">
-            Audience: <b>all {optedIn} currently opted-in contacts</b>. This version intentionally does not send to unconsented contacts.
-          </div>
-
-          <button
-            onClick={createCampaign}
-            disabled={busy === "create" || !form.name || !selectedTemplate || optedIn === 0}
-            className="btn-primary mt-5 disabled:opacity-50"
-          >
-            {busy === "create" ? "Creating…" : "Create Draft"}
-          </button>
+          <div className="mt-5 rounded-xl bg-emerald/[0.05] p-4 text-xs leading-relaxed">Selected audience: <b>{audienceCount} opted-in contact{audienceCount === 1 ? "" : "s"}</b>{form.audience === "tag" && form.audienceTag ? ` tagged “${form.audienceTag}”` : ""}. Unconsented and Do Not Message contacts remain excluded.</div>
+          <button onClick={createCampaign} disabled={busy === "create" || !form.name || !selectedTemplate || audienceCount === 0 || (form.audience === "tag" && !form.audienceTag)} className="btn-primary mt-5 disabled:opacity-50">{busy === "create" ? "Creating…" : "Create Draft"}</button>
         </div>
       )}
 
-      {loading ? (
-        <div className="card p-10 text-center muted">Loading campaigns…</div>
-      ) : campaigns.length === 0 ? (
-        <div className="card p-10 text-center">
-          <p className="font-medium">No campaigns yet</p>
-          <p className="muted mt-2 text-sm">Add opted-in contacts, sync an approved template, then create your first campaign.</p>
-        </div>
-      ) : (
+      {loading ? <div className="card p-10 text-center muted">Loading campaigns…</div> : campaigns.length === 0 ? <div className="card p-10 text-center"><p className="font-medium">No campaigns yet</p><p className="muted mt-2 text-sm">Add opted-in contacts, sync an approved template, then create your first campaign.</p></div> : (
         <div className="space-y-4">
           {campaigns.map((c) => {
             const progress = c.totalRecipients ? Math.round(((c.sentCount + c.failedCount) / c.totalRecipients) * 100) : 0;
             const active = ["queued", "sending"].includes(c.status);
-            return (
-              <div key={c.id} className="card p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-display font-semibold">{c.name}</h3>
-                      <span className="rounded-full border px-2.5 py-1 text-[11px] uppercase" style={{ borderColor: "var(--line)" }}>{c.status.replaceAll("_", " ")}</span>
-                    </div>
-                    <p className="muted mt-1 text-xs">{c.templateName} · {c.templateLanguage}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {c.status === "draft" && (
-                      <button disabled={busy === c.id} onClick={() => launch(c.id)} className="btn-primary text-xs disabled:opacity-50">
-                        {busy === c.id ? "Sending…" : `Launch to ${optedIn} opted-in contacts`}
-                      </button>
-                    )}
-                    {active && (
-                      <button disabled={busy === c.id} onClick={() => resume(c.id)} className="btn-primary text-xs disabled:opacity-50">
-                        {busy === c.id ? "Processing…" : "Resume Sending"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-3 sm:grid-cols-5">
-                  {[
-                    ["Recipients", c.totalRecipients],
-                    ["Sent", c.sentCount],
-                    ["Delivered", c.deliveredCount],
-                    ["Read", c.readCount],
-                    ["Failed", c.failedCount],
-                  ].map(([label, value]) => (
-                    <div key={String(label)} className="rounded-xl border p-3" style={{ borderColor: "var(--line)" }}>
-                      <p className="muted text-[11px]">{label}</p>
-                      <p className="mt-1 font-display text-lg font-semibold">{value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {c.totalRecipients > 0 && (
-                  <div className="mt-4">
-                    <div className="mb-1 flex justify-between text-[11px] muted"><span>Processing</span><span>{Math.min(progress, 100)}%</span></div>
-                    <div className="h-2 overflow-hidden rounded-full bg-white/5">
-                      <div className="h-full bg-emerald transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
-                    </div>
-                  </div>
-                )}
+            const label = c.audience === "tag" ? `Tag: ${c.audienceTag || "segment"}` : "All opted-in";
+            return <div key={c.id} className="card p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-display font-semibold">{c.name}</h3><span className="rounded-full border px-2.5 py-1 text-[11px] uppercase" style={{ borderColor: "var(--line)" }}>{c.status.replaceAll("_", " ")}</span><span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] muted">{label}</span></div><p className="muted mt-1 text-xs">{c.templateName} · {c.templateLanguage}</p></div>
+                {!readOnly && <div className="flex flex-wrap gap-2">{c.status === "draft" && <button disabled={busy === c.id} onClick={() => launch(c.id)} className="btn-primary text-xs disabled:opacity-50">{busy === c.id ? "Sending…" : "Launch Campaign"}</button>}{active && <button disabled={busy === c.id} onClick={() => resume(c.id)} className="btn-primary text-xs disabled:opacity-50">{busy === c.id ? "Processing…" : "Resume Sending"}</button>}</div>}
               </div>
-            );
+              <div className="mt-5 grid gap-3 sm:grid-cols-5">{[["Recipients", c.totalRecipients],["Sent", c.sentCount],["Delivered", c.deliveredCount],["Read", c.readCount],["Failed", c.failedCount]].map(([labelName, value]) => <div key={String(labelName)} className="rounded-xl border p-3" style={{ borderColor: "var(--line)" }}><p className="muted text-[11px]">{labelName}</p><p className="mt-1 font-display text-lg font-semibold">{value}</p></div>)}</div>
+              {c.totalRecipients > 0 && <div className="mt-4"><div className="mb-1 flex justify-between text-[11px] muted"><span>Processing</span><span>{Math.min(progress, 100)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full bg-emerald transition-all" style={{ width: `${Math.min(progress, 100)}%` }} /></div></div>}
+            </div>;
           })}
         </div>
       )}
