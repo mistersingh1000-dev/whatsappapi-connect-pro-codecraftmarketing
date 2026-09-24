@@ -28,8 +28,6 @@ let cached: Firestore | null = null;
 function loadServiceAccount():
   | { projectId: string; clientEmail: string; privateKey: string }
   | null {
-  // Preferred: paste the whole service-account JSON into FIREBASE_SERVICE_ACCOUNT.
-  // Also supported: base64 of the same JSON in FIREBASE_SERVICE_ACCOUNT_BASE64.
   let raw = process.env.FIREBASE_SERVICE_ACCOUNT || null;
   if (!raw && process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
     try {
@@ -45,7 +43,6 @@ function loadServiceAccount():
     return {
       projectId: svc.project_id,
       clientEmail: svc.client_email,
-      // Handle keys pasted with literal \n sequences.
       privateKey: String(svc.private_key).replace(/\\n/g, "\n"),
     };
   } catch {
@@ -84,7 +81,10 @@ export async function findUser(db: Firestore, email: string): Promise<AppUser | 
 }
 
 export async function createUser(db: Firestore, u: Omit<AppUser, "id">): Promise<void> {
-  await db.collection(USERS).doc(normEmail(u.email)).set(u);
+  // Firestore create() fails when the document already exists, closing the
+  // race where two concurrent signups for the same email could overwrite an
+  // existing password hash with set().
+  await db.collection(USERS).doc(normEmail(u.email)).create(u);
 }
 
 export async function updateUser(
