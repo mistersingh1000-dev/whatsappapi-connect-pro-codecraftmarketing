@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import {
   listOrders,
@@ -9,19 +7,13 @@ import {
   approveOrderAndExtend,
 } from "@/lib/orders";
 import { sendEmail, activationEmail } from "@/lib/email";
+import { getAdminSession } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 
-function adminEmail() {
-  return (process.env.ADMIN_EMAIL || "mistersingh1000@gmail.com").toLowerCase();
-}
-
 export async function GET() {
-  const jar = await cookies();
-  const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-  if (!session || session.sub.toLowerCase() !== adminEmail()) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 403 });
-  }
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 403 });
 
   const db = getDb();
   if (!db) return NextResponse.json({ error: "no_db" }, { status: 501 });
@@ -34,11 +26,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const jar = await cookies();
-  const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-  if (!session || session.sub.toLowerCase() !== adminEmail()) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 403 });
-  }
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 403 });
 
   const db = getDb();
   if (!db) return NextResponse.json({ error: "no_db" }, { status: 501 });
