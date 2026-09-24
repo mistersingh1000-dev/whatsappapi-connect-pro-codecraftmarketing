@@ -4,16 +4,15 @@ export const site = {
   domain:
     process.env.NEXT_PUBLIC_SITE_URL ||
     "https://whatsappapi-connect-pro-codecraftma.vercel.app",
-  tagline: "WhatsApp Cloud API onboarding and conversation platform",
+  tagline: "WhatsApp Business Platform onboarding, campaigns and automation",
   description:
-    "Connect customer-owned WhatsApp Business Platform accounts, manage conversations and contacts, process Meta webhooks, and support compliant messaging from one dashboard.",
+    "Connect customer-owned WhatsApp Business Platform accounts through Meta Embedded Signup, manage conversations and contacts, run consented template campaigns, and automate inbound replies from one dashboard.",
   email: "mistersingh1000@gmail.com",
   phone: "+91 70097 32517",
-  // wa.me format: country code + number, no "+", spaces or dashes.
   whatsapp: "917009732517",
   whatsappMessage: "Hi, I am interested in the WhatsApp Connect Pro platform.",
 
-  // ---- UPI payment (manual approval) ----
+  // Manual UPI fallback. Automatic Razorpay checkout is used when configured.
   upiId: "9501216365@mbk",
   upiName: "Codecraft Marketing · MobiKwik",
   upiQrImage: "/upi-qr.jpeg",
@@ -65,64 +64,16 @@ export type Plan = {
   cta: string;
 };
 
+const planCore = ["Embedded Signup", "Inbox & contacts", "Template campaigns", "Keyword chatbot"];
+
 export const plans: Plan[] = [
-  {
-    id: "monthly",
-    name: "Monthly",
-    price: 499,
-    per: "/month",
-    features: ["Cloud API dashboard", "Account connection", "Conversation inbox", "Technical support"],
-    cta: "Start now",
-  },
-  {
-    id: "quarterly",
-    name: "3 Months",
-    price: 999,
-    per: "/quarter",
-    features: ["Everything in Monthly", "Priority support", "Guided setup"],
-    cta: "Choose plan",
-  },
-  {
-    id: "halfyear",
-    name: "6 Months",
-    price: 1499,
-    per: "/6 mo",
-    features: ["Everything included", "Onboarding assistance", "API guidance"],
-    cta: "Choose plan",
-  },
-  {
-    id: "yearly",
-    name: "1 Year",
-    price: 1999,
-    per: "/year",
-    badge: "Best seller",
-    features: ["Longer access", "Priority support", "API guidance"],
-    cta: "Choose plan",
-  },
-  {
-    id: "3year",
-    name: "3 Years",
-    price: 2999,
-    per: "/3 yr",
-    features: ["Long-term platform access", "Priority support", "Onboarding assistance"],
-    cta: "Choose plan",
-  },
-  {
-    id: "5year",
-    name: "5 Years",
-    price: 3999,
-    per: "/5 yr",
-    features: ["Long-term platform access", "Priority support", "Business onboarding assistance"],
-    cta: "Choose plan",
-  },
-  {
-    id: "10year",
-    name: "10 Years",
-    price: 4999,
-    per: "/10 yr",
-    features: ["Long-term platform access", "Priority support", "Business onboarding assistance"],
-    cta: "Choose plan",
-  },
+  { id: "monthly", name: "Monthly", price: 499, per: "/month", features: planCore, cta: "Start now" },
+  { id: "quarterly", name: "3 Months", price: 999, per: "/quarter", features: [...planCore, "Priority support"], cta: "Choose plan" },
+  { id: "halfyear", name: "6 Months", price: 1499, per: "/6 mo", features: [...planCore, "Onboarding assistance"], cta: "Choose plan" },
+  { id: "yearly", name: "1 Year", price: 1999, per: "/year", badge: "Best seller", features: [...planCore, "Priority support"], cta: "Choose plan" },
+  { id: "3year", name: "3 Years", price: 2999, per: "/3 yr", features: [...planCore, "Long-term access"], cta: "Choose plan" },
+  { id: "5year", name: "5 Years", price: 3999, per: "/5 yr", features: [...planCore, "Long-term access"], cta: "Choose plan" },
+  { id: "10year", name: "10 Years", price: 4999, per: "/10 yr", features: [...planCore, "Long-term access"], cta: "Choose plan" },
   {
     id: "lifetime",
     name: "Lifetime",
@@ -130,52 +81,47 @@ export const plans: Plan[] = [
     note: "one-time platform access",
     badge: "Most popular",
     highlight: true,
-    features: [
-      "Lifetime platform access",
-      "Priority support",
-      "Product updates included",
-      "Guided onboarding",
-    ],
+    features: [...planCore, "Product updates included", "Priority support"],
     cta: "Buy lifetime plan",
   },
 ];
 
-// Kept for compatibility with components that may still import this list.
-// Customer-facing feature grids use lib/launch-features.ts so only tested scope is advertised.
 export const features = [
-  { title: "WhatsApp Cloud API Connection", desc: "Connect and validate a customer-owned WhatsApp phone number.", icon: "shield" },
-  { title: "Meta Embedded Signup", desc: "Use Facebook Login for Business when your Meta configuration and permissions are enabled.", icon: "spark" },
+  { title: "Meta Embedded Signup", desc: "Customers connect their own Business Portfolio, WABA and number through Meta's hosted onboarding flow.", icon: "spark" },
   { title: "Conversation Inbox", desc: "View inbound conversations and reply from the dashboard within applicable messaging rules.", icon: "inbox" },
-  { title: "Contacts", desc: "Keep WhatsApp contacts organized per customer account.", icon: "link" },
-  { title: "Signed Webhooks", desc: "Process authenticated Meta webhook events for messages and message status updates.", icon: "webhook" },
+  { title: "Contacts & Consent", desc: "Import and organize contacts with tags, marketing opt-in records and Do Not Message protection.", icon: "link" },
+  { title: "Template Campaigns", desc: "Send Meta-approved WhatsApp templates to consented audiences or CRM tag segments.", icon: "send" },
+  { title: "Keyword Chatbot", desc: "Create priority keyword rules and a default fallback reply with optional CRM tagging.", icon: "bot" },
+  { title: "Signed Webhooks", desc: "Process authenticated Meta webhook events for messages and delivery/read status updates.", icon: "webhook" },
   { title: "Account Analytics", desc: "See conversation, contact, message, unread and connection metrics.", icon: "chart" },
+  { title: "Subscription Access", desc: "7-day trial, paid access gating, automatic online checkout when configured and manual UPI fallback.", icon: "shield" },
 ];
 
 export const signupSteps = [
   {
     n: 1,
-    title: "Sign in to the platform",
-    desc: "Create your WhatsApp Connect Pro account and open the API setup area.",
+    title: "Create your account",
+    desc: "Register for WhatsApp Connect Pro and start the 7-day platform trial.",
   },
   {
     n: 2,
-    title: "Open Meta onboarding",
-    desc: "Use Embedded Signup when enabled, or connect approved Cloud API credentials manually.",
+    title: "Connect WhatsApp",
+    desc: "Tap Connect WhatsApp to open the official Meta Embedded Signup popup.",
   },
   {
     n: 3,
     title: "Choose business assets",
-    desc: "Select the correct Meta Business Portfolio, WhatsApp Business Account and phone number.",
+    desc: "Inside Meta, choose or create the correct Business Portfolio, WhatsApp Business Account and phone number.",
   },
   {
     n: 4,
-    title: "Complete Meta requirements",
-    desc: "Finish any number verification, business verification or permission steps Meta requires for that account.",
+    title: "Complete Meta verification",
+    desc: "Complete any OTP, business verification or eligibility step Meta requires for the selected account or number.",
   },
   {
     n: 5,
-    title: "Use the dashboard",
-    desc: "Receive webhook events, manage conversations and send messages subject to WhatsApp messaging rules.",
+    title: "Use automation tools",
+    desc: "After activation, use inbox, contacts, templates, broadcasts and keyword chatbot rules from the dashboard.",
   },
 ];
 
@@ -186,34 +132,37 @@ export const faqs = [
   },
   {
     q: "How does Embedded Signup work?",
-    a: "Embedded Signup uses Meta's Facebook Login for Business flow. A customer chooses the relevant business and WhatsApp assets in a Meta-hosted flow, and the platform completes the server-side connection after Meta returns the required authorization result.",
+    a: "Embedded Signup opens a Meta-hosted Facebook Login for Business flow. The customer chooses the relevant Business Portfolio, WhatsApp Business Account and number, and the platform completes the server-side connection after Meta returns the authorization result.",
   },
   {
-    q: "Does Embedded Signup work immediately for every customer?",
-    a: "Not always. Your Meta app must be configured correctly, and production onboarding can require approved permissions, advanced access, business verification or other Meta review steps. Individual customer accounts can also have their own eligibility or verification requirements.",
+    q: "Does Embedded Signup guarantee instant API approval?",
+    a: "No. The onboarding popup can make account connection much faster, but Meta controls App Review, business verification, number eligibility and any additional approvals required for a specific account.",
   },
   {
     q: "Can I use an existing WhatsApp number?",
-    a: "It depends on the number's current WhatsApp setup and Meta's supported migration or coexistence options at the time you onboard it. Check the current Meta flow shown during onboarding rather than deleting an existing account without confirming the migration path.",
+    a: "It depends on the number's current WhatsApp setup and Meta's supported migration or coexistence options at the time you onboard it. Follow the current options Meta shows during Embedded Signup rather than deleting an existing account without confirming the migration path.",
   },
   {
     q: "Can I send bulk or marketing messages?",
-    a: "Business-initiated messaging must follow Meta's current opt-in, template, category and policy requirements. The platform should only be used for compliant recipients and approved message flows.",
+    a: "Business-initiated messaging must follow Meta's current opt-in, template, category and policy requirements. WhatsApp Connect Pro automatically excludes contacts without recorded marketing opt-in and contacts marked Do Not Message from campaigns.",
+  },
+  {
+    q: "How does the chatbot work?",
+    a: "You can create keyword or phrase rules, choose contains or exact matching, set rule priority, add a default fallback reply and optionally tag matching contacts. Replies run from authenticated inbound webhook events while the account subscription is active.",
   },
   {
     q: "Are Meta messaging charges included in the platform price?",
-    a: "No. The prices shown here are for WhatsApp Connect Pro platform access. Any WhatsApp Business Platform usage charges billed by Meta are separate and depend on the customer's own account activity and Meta's current pricing.",
+    a: "No. The prices shown are for WhatsApp Connect Pro platform access. WhatsApp Business Platform usage charges billed by Meta are separate and depend on the customer's own account activity and Meta's current pricing.",
   },
   {
-    q: "Do you provide setup support?",
-    a: "Yes. The platform plans include onboarding guidance for connecting the account, checking IDs and credentials, and configuring the required webhook and dashboard steps.",
+    q: "How are subscriptions activated?",
+    a: "When Razorpay is configured, secure online payments can be verified server-side and activate the plan automatically. Manual UPI with admin verification remains available as a fallback.",
   },
 ];
 
-// Legacy compatibility export. Not rendered on the launch homepage.
 export const stats = [
-  { value: 6, suffix: "", label: "Launch-ready capabilities" },
+  { value: 8, suffix: "", label: "Core platform capabilities" },
   { value: 7, suffix: " days", label: "Dashboard trial" },
-  { value: 1, suffix: "", label: "Unified conversation dashboard" },
+  { value: 1, suffix: "", label: "Unified automation dashboard" },
   { value: 0, suffix: "", label: "Unsupported performance claims" },
 ];
