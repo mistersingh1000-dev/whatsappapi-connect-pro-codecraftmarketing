@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { COOKIE_NAME, verifySession } from "@/lib/auth";
+import { getAdminSession } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
-
-function adminEmail(): string {
-  return (process.env.ADMIN_EMAIL || "mistersingh1000@gmail.com").trim().toLowerCase();
-}
 
 async function graph(url: string, init: RequestInit = {}) {
   const res = await fetch(url, { ...init, cache: "no-store" });
@@ -15,9 +10,8 @@ async function graph(url: string, init: RequestInit = {}) {
 }
 
 export async function GET() {
-  const jar = await cookies();
-  const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-  if (!session || session.sub.toLowerCase() !== adminEmail()) {
+  const session = await getAdminSession();
+  if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
 
