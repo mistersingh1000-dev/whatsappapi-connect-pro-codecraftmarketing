@@ -10,13 +10,25 @@ import {
   type AutomationRule,
 } from "@/lib/automation-db";
 
-function matches(rule: AutomationRule, text: string): boolean {
+function keywordMatches(rule: AutomationRule, text: string): boolean {
+  if (rule.triggerType !== "keyword") return false;
   const input = text.trim().toLowerCase();
   return rule.keywords.some((keyword) => {
     const k = keyword.trim().toLowerCase();
     if (!k) return false;
     return rule.matchMode === "exact" ? input === k : input.includes(k);
   });
+}
+
+export function matchAutomationRule(
+  rules: AutomationRule[],
+  text: string
+): AutomationRule | null {
+  // Rules arrive priority-sorted from the database. Highest-priority keyword
+  // match wins. A fallback rule only runs when no keyword rule matched.
+  const keyword = rules.find((rule) => keywordMatches(rule, text));
+  if (keyword) return keyword;
+  return rules.find((rule) => rule.triggerType === "fallback") || null;
 }
 
 function personalize(text: string, contact: Contact): string {
@@ -93,13 +105,8 @@ export async function runInboundAutomations(args: {
   if (args.contact.doNotMessage === true) return { matched: 0, sent: 0, blocked: "do_not_message" };
 
   const rules = await listEnabledAutomationRules(args.db, args.owner.email);
-  const matching = rules.filter((rule) => matches(rule, args.inboundText));
-  if (!matching.length) return { matched: 0, sent: 0 };
-
-  // First-match execution keeps the initial automation engine predictable and
-  // avoids multiple bots replying to one customer message. More complex flow
-  // branching can be layered on top of this engine later.
-  const rule = matching[0];
+  const rule = matchAutomationRule(rules, args.inboundText);
+  if (!rule) return { matched: 0, sent: 0 };
 
   if (rule.addTags.length) {
     const tags = Array.from(new Set([...(args.contact.tags || []), ...rule.addTags])).slice(0, 25);
@@ -117,5 +124,5 @@ export async function runInboundAutomations(args: {
   );
   await markAutomationRun(args.db, rule);
 
-  return { matched: matching.length, sent: 1, ruleId: rule.id };
+  return { matched: 1, sent: 1, ruleId: rule.id, triggerType: rule.triggerType };
 }
