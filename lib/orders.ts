@@ -21,21 +21,36 @@ export type Order = {
 
 const ORDERS = "orders";
 const USERS = "users";
+const REFERENCE_LOCKS = "order_reference_locks";
 
 export async function createOrder(
   db: Firestore,
   data: Omit<Order, "id" | "status" | "createdAt" | "decidedAt" | "decidedBy">
 ): Promise<Order> {
   const ref = db.collection(ORDERS).doc();
+  const reference = data.reference.trim();
+  const lockRef = db.collection(REFERENCE_LOCKS).doc(reference.toLowerCase());
   const order: Order = {
     ...data,
+    reference,
     id: ref.id,
     status: "pending",
     createdAt: new Date().toISOString(),
     decidedAt: null,
     decidedBy: null,
   };
-  await ref.set(order);
+
+  await db.runTransaction(async (tx) => {
+    const lock = await tx.get(lockRef);
+    if (lock.exists) throw new Error("reference_already_used");
+    tx.create(ref, order);
+    tx.create(lockRef, {
+      reference,
+      orderId: ref.id,
+      userId: data.userId,
+      createdAt: order.createdAt,
+    });
+  });
   return order;
 }
 
@@ -57,7 +72,6 @@ export async function findOrderByReference(
   return snap.docs[0].data() as Order;
 }
 
-// Most recent pending order for a customer — drives the "under process" banner.
 export async function pendingOrderFor(db: Firestore, userId: string): Promise<Order | null> {
   const snap = await db
     .collection(ORDERS)
@@ -92,21 +106,13 @@ export async function decideOrder(
     const snap = await tx.get(ref);
     if (!snap.exists) return null;
     const order = snap.data() as Order;
-    if (order.status !== "pending") {
-      throw new Error("already_decided");
-    }
-    const updates = {
-      status,
-      decidedAt: new Date().toISOString(),
-      decidedBy,
-    };
+    if (order.status !== "pending") throw new Error("already_decided");
+    const updates = { status, decidedAt: new Date().toISOString(), decidedBy };
     tx.update(ref, updates);
     return { ...order, ...updates } as Order;
   });
 }
 
-// Atomically mark a pending order approved AND extend the user's access.
-// This prevents a network/database failure from extending the same order twice.
 export async function approveOrderAndExtend(
   db: Firestore,
   id: string,
@@ -119,15 +125,11 @@ export async function approveOrderAndExtend(
     if (!orderSnap.exists) return null;
 
     const order = orderSnap.data() as Order;
-    if (order.status !== "pending") {
-      throw new Error("already_decided");
-    }
+    if (order.status !== "pending") throw new Error("already_decided");
 
     const userRef = db.collection(USERS).doc(String(order.userId).trim().toLowerCase());
     const userSnap = await tx.get(userRef);
-    if (!userSnap.exists) {
-      throw new Error("user_not_found");
-    }
+    if (!userSnap.exists) throw new Error("user_not_found");
 
     const user = userSnap.data() as any;
     const now = new Date();
@@ -138,19 +140,10 @@ export async function approveOrderAndExtend(
     const decidedAt = new Date().toISOString();
 
     tx.update(userRef, { plan: "paid", trial_ends_at: validUntil });
-    tx.update(orderRef, {
-      status: "approved",
-      decidedAt,
-      decidedBy,
-    });
+    tx.update(orderRef, { status: "approved", decidedAt, decidedBy });
 
     return {
-      order: {
-        ...order,
-        status: "approved",
-        decidedAt,
-        decidedBy,
-      },
+      order: { ...order, status: "approved", decidedAt, decidedBy },
       validUntil,
     };
   });
