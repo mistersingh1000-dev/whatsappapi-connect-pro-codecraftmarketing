@@ -23,7 +23,13 @@ export async function POST(_req: Request, { params }: any) {
     return NextResponse.json({ campaign });
   } catch (e: any) {
     const code = String(e?.message || "failed");
-    const status = code === "campaign_not_found" ? 404 : code === "whatsapp_not_ready" ? 409 : 500;
-    return NextResponse.json({ error: code }, { status });
+    if (code === "campaign_not_found") return NextResponse.json({ error: code }, { status: 404 });
+    if (code === "whatsapp_not_ready") {
+      return NextResponse.json({ error: code, message: "WhatsApp connection is not fully active." }, { status: 409 });
+    }
+    if (code === "access_expired") {
+      return NextResponse.json({ error: code, message: "Your subscription has ended. Renew to continue this campaign." }, { status: 402 });
+    }
+    return NextResponse.json({ error: code }, { status: 500 });
   }
 }

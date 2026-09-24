@@ -41,10 +41,18 @@ export async function POST(req: Request) {
   const variableValues = Array.isArray(body.variableValues)
     ? body.variableValues.map((v: unknown) => String(v).slice(0, 500)).slice(0, 20)
     : [];
+  const audience = body.audience === "tag" ? "tag" : "all_opted_in";
+  const audienceTag = audience === "tag" ? String(body.audienceTag || "").trim().slice(0, 40) : null;
 
   if (!name || !templateName) {
     return NextResponse.json(
       { error: "missing_fields", message: "Campaign name and approved template are required." },
+      { status: 400 }
+    );
+  }
+  if (audience === "tag" && !audienceTag) {
+    return NextResponse.json(
+      { error: "audience_tag_required", message: "Choose a contact tag for this segment." },
       { status: 400 }
     );
   }
@@ -110,7 +118,8 @@ export async function POST(req: Request) {
       templateName,
       templateLanguage,
       variableValues,
-      audience: "all_opted_in",
+      audience,
+      audienceTag,
     });
     return NextResponse.json({ campaign }, { status: 201 });
   } catch (e: any) {

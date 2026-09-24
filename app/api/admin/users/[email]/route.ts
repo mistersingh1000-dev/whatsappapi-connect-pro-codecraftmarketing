@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb, updateUser } from "@/lib/db";
+import { getAdminSession } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 
 const ALLOWED_PLANS = new Set(["trial", "paid", "free", "expired", "suspended"]);
 
 export async function PATCH(req: Request, { params }: any) {
-  const jar = await cookies();
-  const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-
-  const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "mistersingh1000@gmail.com").trim().toLowerCase();
-  if (!session || session.sub.toLowerCase() !== ADMIN_EMAIL) {
+  const session = await getAdminSession();
+  if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
 

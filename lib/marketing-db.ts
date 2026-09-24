@@ -15,7 +15,8 @@ export type Campaign = {
   templateName: string;
   templateLanguage: string;
   variableValues: string[];
-  audience: "all_opted_in";
+  audience: "all_opted_in" | "tag";
+  audienceTag?: string | null;
   status: CampaignStatus;
   totalRecipients: number;
   sentCount: number;
@@ -53,6 +54,14 @@ export type CampaignRecipient = {
 const CAMPAIGNS = "campaigns";
 const RECIPIENTS = "campaignRecipients";
 
+function normalizeCampaign(data: any): Campaign {
+  return {
+    ...data,
+    audience: data?.audience === "tag" ? "tag" : "all_opted_in",
+    audienceTag: data?.audience === "tag" ? String(data?.audienceTag || "") || null : null,
+  } as Campaign;
+}
+
 export async function createCampaign(
   db: Firestore,
   data: Omit<Campaign, "id" | "status" | "totalRecipients" | "sentCount" | "failedCount" | "deliveredCount" | "readCount" | "createdAt" | "startedAt" | "completedAt" | "lastError">
@@ -78,7 +87,7 @@ export async function createCampaign(
 
 export async function listCampaigns(db: Firestore, userId: string): Promise<Campaign[]> {
   const snap = await db.collection(CAMPAIGNS).where("userId", "==", userId).get();
-  const rows = snap.docs.map((doc) => doc.data() as Campaign);
+  const rows = snap.docs.map((doc) => normalizeCampaign(doc.data()));
   rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return rows;
 }
@@ -89,7 +98,7 @@ export async function listRunnableCampaigns(db: Firestore, limit = 20): Promise<
     .where("status", "in", ["queued", "sending"])
     .limit(Math.max(1, Math.min(limit, 50)))
     .get();
-  return snap.docs.map((doc) => doc.data() as Campaign);
+  return snap.docs.map((doc) => normalizeCampaign(doc.data()));
 }
 
 export async function getCampaign(
@@ -97,7 +106,7 @@ export async function getCampaign(
   campaignId: string
 ): Promise<Campaign | null> {
   const snap = await db.collection(CAMPAIGNS).doc(campaignId).get();
-  return snap.exists ? (snap.data() as Campaign) : null;
+  return snap.exists ? normalizeCampaign(snap.data()) : null;
 }
 
 export async function updateCampaign(
@@ -110,7 +119,7 @@ export async function updateCampaign(
   if (!snap.exists) return null;
   await ref.update(updates);
   const after = await ref.get();
-  return after.data() as Campaign;
+  return normalizeCampaign(after.data());
 }
 
 export async function seedCampaignRecipients(
@@ -166,8 +175,6 @@ export async function seedCampaignRecipients(
   return written;
 }
 
-// Atomically claim queued recipients before sending. This prevents two
-// overlapping browser/cron invocations from sending the same recipient twice.
 export async function claimQueuedRecipients(
   db: Firestore,
   campaignId: string,
@@ -196,8 +203,6 @@ export async function claimQueuedRecipients(
   return claimed;
 }
 
-// Requeue recipients left in processing if an invocation died before reaching
-// Meta. Only stale rows are touched, avoiding interference with active sends.
 export async function requeueStaleProcessingRecipients(
   db: Firestore,
   campaignId: string,

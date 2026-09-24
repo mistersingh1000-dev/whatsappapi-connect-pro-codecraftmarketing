@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { COOKIE_NAME, verifySession } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { getAdminSession } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 
@@ -22,11 +21,8 @@ function databaseReady(): boolean {
 }
 
 export async function GET() {
-  const jar = await cookies();
-  const session = await verifySession(jar.get(COOKIE_NAME)?.value);
-  const adminEmail = (process.env.ADMIN_EMAIL || "mistersingh1000@gmail.com").toLowerCase();
-
-  if (!session || session.sub.toLowerCase() !== adminEmail) {
+  const session = await getAdminSession();
+  if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
 
@@ -71,14 +67,14 @@ export async function GET() {
       label: "Production site URL",
       configured: configured("NEXT_PUBLIC_SITE_URL"),
       required: true,
-      help: "Used for canonical links and provider callbacks.",
+      help: "Used for canonical links, password reset links and provider callbacks.",
     },
     {
       id: "admin-email",
       label: "Admin account email",
-      configured: configured("ADMIN_EMAIL"),
+      configured: configured("ADMIN_EMAIL") || configured("ADMIN_EMAILS"),
       required: true,
-      help: "Controls access to the owner/admin pages. Configure this explicitly in production.",
+      help: "Controls access to owner/admin pages. No hardcoded production fallback is used.",
     },
     {
       id: "meta-app-id",
@@ -113,7 +109,21 @@ export async function GET() {
       label: "Email notifications",
       configured: configured("RESEND_API_KEY") && configured("EMAIL_FROM"),
       required: false,
-      help: "Recommended for payment-received and plan-activation emails. Payments still save without it.",
+      help: "Recommended for password reset, payment and plan-activation emails.",
+    },
+    {
+      id: "razorpay",
+      label: "Automatic Razorpay checkout",
+      configured: configured("RAZORPAY_KEY_ID") && configured("RAZORPAY_KEY_SECRET"),
+      required: false,
+      help: "When configured, customers can pay online and activate their plan after signed payment verification. Manual UPI remains available as fallback.",
+    },
+    {
+      id: "razorpay-webhook",
+      label: "Razorpay webhook secret",
+      configured: configured("RAZORPAY_WEBHOOK_SECRET"),
+      required: false,
+      help: "Recommended for server-to-server payment recovery if the customer closes checkout before browser verification finishes.",
     },
     {
       id: "provider-mode",
@@ -121,7 +131,7 @@ export async function GET() {
       configured: providerMode,
       required: false,
       help: providerMode
-        ? "Enabled. Provider WABA/system-user checks become required for one-click multi-client onboarding."
+        ? "Enabled. Provider WABA/system-user checks become required for multi-client onboarding."
         : "Keep disabled until your Meta Tech Provider / Solution Partner setup and permissions are approved.",
     },
     {

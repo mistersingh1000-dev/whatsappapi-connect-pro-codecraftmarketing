@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { COOKIE_NAME, verifySession } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { findUser, getDb } from "@/lib/db";
 import { listMarketingOptedInContacts } from "@/lib/chat-db";
+import { accessState, paidFeatureError } from "@/lib/entitlements";
 import { getCampaign, seedCampaignRecipients } from "@/lib/marketing-db";
 import { processCampaignBatch } from "@/lib/whatsapp-campaigns";
 
@@ -20,6 +21,14 @@ export async function POST(_req: Request, { params }: any) {
   if (!campaignId) return NextResponse.json({ error: "missing_id" }, { status: 400 });
 
   try {
+    const user = await findUser(db, session.sub);
+    if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+    const access = accessState(user);
+    if (!access.active) {
+      const denied = paidFeatureError(access);
+      return NextResponse.json({ error: denied.error, message: denied.message }, { status: denied.status });
+    }
+
     const campaign = await getCampaign(db, campaignId);
     if (!campaign || campaign.userId !== session.sub) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -31,12 +40,21 @@ export async function POST(_req: Request, { params }: any) {
       );
     }
 
-    const contacts = await listMarketingOptedInContacts(db, session.sub);
+    let contacts = await listMarketingOptedInContacts(db, session.sub);
+    if (campaign.audience === "tag") {
+      const tag = String(campaign.audienceTag || "").trim().toLowerCase();
+      contacts = contacts.filter((contact) =>
+        (contact.tags || []).some((candidate) => String(candidate).trim().toLowerCase() === tag)
+      );
+    }
+
     if (!contacts.length) {
       return NextResponse.json(
         {
-          error: "no_opted_in_contacts",
-          message: "No contacts have marketing opt-in. Confirm consent in Contacts before launching a campaign.",
+          error: "no_eligible_contacts",
+          message: campaign.audience === "tag"
+            ? `No opted-in contacts currently have the tag “${campaign.audienceTag || "selected tag"}”.`
+            : "No contacts have marketing opt-in. Confirm consent in Contacts before launching a campaign.",
         },
         { status: 409 }
       );
@@ -47,7 +65,7 @@ export async function POST(_req: Request, { params }: any) {
       return NextResponse.json(
         {
           error: "audience_too_large",
-          message: `This release allows up to ${maxRecipients} opted-in recipients per campaign. Segment the audience before sending a larger campaign.`,
+          message: `This deployment allows up to ${maxRecipients} recipients per campaign. Use a tag segment or reduce the audience before sending.`,
         },
         { status: 409 }
       );
@@ -66,6 +84,12 @@ export async function POST(_req: Request, { params }: any) {
       return NextResponse.json(
         { error: code, message: "WhatsApp connection is not fully active." },
         { status: 409 }
+      );
+    }
+    if (code === "access_expired") {
+      return NextResponse.json(
+        { error: code, message: "Your subscription access has ended. Renew before launching campaigns." },
+        { status: 402 }
       );
     }
     return NextResponse.json({ error: code || "failed" }, { status: 500 });

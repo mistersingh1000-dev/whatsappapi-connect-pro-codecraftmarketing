@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { COOKIE_NAME } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { consumePasswordResetToken } from "@/lib/password-reset";
+import { consumeRateLimit, rateLimitResponse, requestIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -17,9 +18,9 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  if (newPassword.length < 8) {
+  if (newPassword.length < 8 || newPassword.length > 200) {
     return NextResponse.json(
-      { error: "weak_password", message: "Password must be at least 8 characters." },
+      { error: "weak_password", message: "Password must be between 8 and 200 characters." },
       { status: 400 }
     );
   }
@@ -31,6 +32,15 @@ export async function POST(req: Request) {
       { status: 503 }
     );
   }
+
+  const limit = await consumeRateLimit(
+    db,
+    "auth-reset-password",
+    requestIp(req),
+    10,
+    15 * 60 * 1000
+  );
+  if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
   const ok = await consumePasswordResetToken(db, cleanToken, passwordHash);
