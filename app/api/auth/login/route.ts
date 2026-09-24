@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { COOKIE_NAME, createSession } from "@/lib/auth";
-import { getDb, findUser } from "@/lib/db";
+import { getDb, findUser, normEmail } from "@/lib/db";
+import { accessState } from "@/lib/entitlements";
+import { consumeRateLimit, rateLimitResponse, requestIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -19,8 +21,18 @@ export async function POST(req: Request) {
     );
   }
 
-  const user = await findUser(db, email);
-  if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+  const cleanEmail = normEmail(email);
+  const limit = await consumeRateLimit(
+    db,
+    "auth-login",
+    `${requestIp(req)}:${cleanEmail}`,
+    10,
+    15 * 60 * 1000
+  );
+  if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
+  const user = await findUser(db, cleanEmail);
+  if (!user || !(await bcrypt.compare(String(password), user.password_hash))) {
     return NextResponse.json(
       { error: "invalid", message: "Incorrect email or password." },
       { status: 401 }
@@ -34,8 +46,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const expired = user.plan !== "paid" && new Date(user.trial_ends_at).getTime() < Date.now();
-  const plan = expired ? "expired" : (user.plan as any);
+  const access = accessState(user);
+  const plan = access.active
+    ? (user.plan as "trial" | "free" | "paid")
+    : "expired";
 
   const token = await createSession({
     email: user.email,
@@ -43,7 +57,13 @@ export async function POST(req: Request) {
     plan,
     trialEndsAt: user.trial_ends_at,
   });
-  const res = NextResponse.json({ ok: true, plan, readOnly: expired });
+  const res = NextResponse.json({
+    ok: true,
+    plan,
+    readOnly: access.readOnly,
+    accessStatus: access.reason,
+    daysLeft: access.daysLeft,
+  });
   res.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
