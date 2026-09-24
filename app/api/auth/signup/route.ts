@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { COOKIE_NAME, createSession, newTrialEnd, TRIAL_DAYS, authConfigured } from "@/lib/auth";
 import { getDb, findUser, createUser, normEmail } from "@/lib/db";
+import { consumeRateLimit, rateLimitResponse, requestIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -22,9 +23,9 @@ export async function POST(req: Request) {
   if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
     return NextResponse.json({ error: "invalid_email", message: "Enter a valid email address." }, { status: 400 });
   }
-  if (String(password).length < 8) {
+  if (String(password).length < 8 || String(password).length > 200) {
     return NextResponse.json(
-      { error: "weak_password", message: "Password must be at least 8 characters." },
+      { error: "weak_password", message: "Password must be between 8 and 200 characters." },
       { status: 400 }
     );
   }
@@ -40,6 +41,9 @@ export async function POST(req: Request) {
     );
   }
 
+  const limit = await consumeRateLimit(db, "auth-signup", requestIp(req), 5, 60 * 60 * 1000);
+  if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
   const existing = await findUser(db, cleanEmail);
   if (existing) {
     return NextResponse.json(
@@ -49,7 +53,7 @@ export async function POST(req: Request) {
   }
 
   const trialEndsAt = newTrialEnd();
-  const password_hash = await bcrypt.hash(password, 12);
+  const password_hash = await bcrypt.hash(String(password), 12);
 
   try {
     await createUser(db, {
@@ -65,8 +69,15 @@ export async function POST(req: Request) {
       created_at: new Date().toISOString(),
     });
   } catch (e: any) {
+    const message = String(e?.message || "");
+    if (String(e?.code || "").includes("already") || /already exists/i.test(message)) {
+      return NextResponse.json(
+        { error: "account_exists", message: "An account with this email already exists. Please log in." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
-      { error: "db_error", message: e?.message || "Could not create the account." },
+      { error: "db_error", message: message || "Could not create the account." },
       { status: 500 }
     );
   }
