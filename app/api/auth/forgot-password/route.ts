@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb, findUser, normEmail } from "@/lib/db";
 import { issuePasswordResetToken } from "@/lib/password-reset";
+import { consumeRateLimit, rateLimitResponse, requestIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,15 @@ export async function POST(req: Request) {
       { status: 503 }
     );
   }
+
+  const limit = await consumeRateLimit(
+    db,
+    "auth-forgot-password",
+    requestIp(req),
+    5,
+    15 * 60 * 1000
+  );
+  if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.EMAIL_FROM?.trim();
