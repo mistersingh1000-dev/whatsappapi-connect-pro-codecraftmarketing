@@ -17,8 +17,10 @@ export default function Footer() {
               </span>
             </Link>
             <p className="muted mt-4 max-w-sm text-sm leading-relaxed">
-              The official WhatsApp Business API, set up in minutes through Meta Embedded Signup.
-              Send notifications, OTPs, support and marketing — the compliant way.
+              Independent software operated by Codecraft Marketing for businesses using the WhatsApp Business Platform. Customer onboarding uses Meta-hosted Embedded Signup.
+            </p>
+            <p className="muted mt-3 max-w-sm text-xs leading-relaxed">
+              We never ask for your Facebook password, Facebook OTP, WhatsApp OTP, Meta access token, or card PIN over chat, email, or support messages.
             </p>
             <div className="mt-5 flex items-center gap-3 text-sm">
               <a href={`mailto:${site.email}`} className="muted hover:text-emerald">
@@ -44,9 +46,9 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t pt-6 text-sm muted sm:flex-row" style={{ borderColor: "var(--line)" }}>
-          <p>© 2026 WhatsApp Connect Pro. All Rights Reserved.</p>
-          <p className="text-xs">
-            Not affiliated with Meta. WhatsApp is a trademark of Meta Platforms, Inc.
+          <p>© 2026 WhatsApp Connect Pro · Operated by Codecraft Marketing.</p>
+          <p className="max-w-xl text-center text-xs sm:text-right">
+            WhatsApp Connect Pro is not Meta, WhatsApp, or an official Meta/WhatsApp product and is not endorsed by Meta Platforms, Inc. WhatsApp and Meta are trademarks of their respective owners.
           </p>
         </div>
       </div>
