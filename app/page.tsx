@@ -10,7 +10,7 @@ import Reveal from "@/components/Reveal";
 import { Icon } from "@/components/Icons";
 
 const trust = [
-  "Meta Cloud API integration",
+  "Built for the WhatsApp Business Platform",
   "Customer-owned WhatsApp accounts",
   "Signed webhook processing",
   "Dashboard & conversation inbox",
@@ -27,19 +27,17 @@ export default function HomePage() {
             <Reveal>
               <span className="eyebrow">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald" />
-                WhatsApp Business Platform integration
+                Independent WhatsApp Business Platform software
               </span>
             </Reveal>
             <Reveal delay={80}>
               <h1 className="mt-5 font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
-                Manage customer conversations on the <span className="gradient-text">official WhatsApp Cloud API</span>
+                Manage customer conversations with the <span className="gradient-text">WhatsApp Business Platform Cloud API</span>
               </h1>
             </Reveal>
             <Reveal delay={160}>
               <p className="muted mt-5 max-w-xl text-base leading-relaxed sm:text-lg">
-                Connect a business-owned WhatsApp account, receive messages and delivery events,
-                manage contacts and conversations, and send compliant customer-support or approved
-                template messages from one dashboard.
+                WhatsApp Connect Pro is independent software operated by Codecraft Marketing. Connect a business-owned WhatsApp account through Meta-hosted Embedded Signup, receive messages and delivery events, manage contacts and conversations, and send compliant support or approved template messages from one dashboard.
               </p>
             </Reveal>
             <Reveal delay={240}>
@@ -61,6 +59,9 @@ export default function HomePage() {
                   </li>
                 ))}
               </ul>
+              <p className="muted mt-5 max-w-xl text-xs leading-relaxed">
+                Facebook credentials and verification codes are entered only in Meta-hosted flows when Meta requests them. We do not ask customers to send Facebook passwords, OTPs, access tokens, or card PINs to us.
+              </p>
             </Reveal>
           </div>
 
@@ -71,7 +72,7 @@ export default function HomePage() {
 
         <div className="border-y py-5" style={{ borderColor: "var(--line)" }}>
           <div className="container-px flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm muted">
-            <span className="text-xs uppercase tracking-[0.18em]">Built on Meta Cloud API</span>
+            <span className="text-xs uppercase tracking-[0.18em]">Built for Meta Cloud API</span>
             <span className="hidden h-4 w-px bg-current opacity-20 sm:block" />
             <span>Webhooks</span>
             <span>Template sending</span>
@@ -102,7 +103,7 @@ export default function HomePage() {
         <SectionHeading
           eyebrow="Meta Embedded Signup"
           title="A simpler customer onboarding flow"
-          subtitle="After your Meta Login for Business configuration and required permissions are approved, customers can connect their Business Portfolio and WhatsApp assets from inside the platform."
+          subtitle="After your Meta Login for Business configuration and required permissions are approved, customers can connect their Business Portfolio and WhatsApp assets from inside the platform. The authorization window is hosted by Meta."
         />
         <div className="mt-12">
           <SignupFlow />
@@ -146,7 +147,7 @@ export default function HomePage() {
                 <Icon.whatsapp className="h-5 w-5 text-emerald" /> WhatsApp onboarding support
               </p>
               <p className="flex items-center gap-3">
-                <Icon.shield className="h-5 w-5 text-emerald" /> Official Meta Cloud API integration
+                <Icon.shield className="h-5 w-5 text-emerald" /> Meta-hosted Embedded Signup connection
               </p>
               <p className="flex items-center gap-3">
                 <Icon.bolt className="h-5 w-5 text-emerald" /> Guided API and webhook setup
