@@ -11,25 +11,22 @@ export const metadata: Metadata = {
     "Use Meta Embedded Signup to connect a customer's Business Portfolio, WhatsApp Business Account and phone number to WhatsApp Connect Pro.",
 };
 
-const sdkCode = `// Important: Meta returns the authorization code and the
-// WA_EMBEDDED_SIGNUP FINISH event separately. Collect BOTH before
-// calling your server.
-let code;
-let waba_id;
-let phone_number_id;
-
-function finishWhenReady() {
-  if (!code || !waba_id || !phone_number_id) return;
-  return fetch("/api/embedded-signup/exchange", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, waba_id, phone_number_id }),
-  });
-}
-
-// FB.login callback -> save response.authResponse.code into 'code'.
-// WA_EMBEDDED_SIGNUP FINISH postMessage -> save waba_id + phone_number_id.
-// Then call finishWhenReady().`;
+const sdkCode = `// Embedded Signup v4: configure products and permissions in
+// Facebook Login for Business. The launch extras object stays empty.
+FB.login(
+  function (response) {
+    const code = response?.authResponse?.code;
+    // Wait for BOTH this authorization code and the WA_EMBEDDED_SIGNUP
+    // FINISH postMessage (waba_id + phone_number_id) before server exchange.
+  },
+  {
+    config_id: "YOUR_V4_CONFIGURATION_ID",
+    auth_type: "rerequest",
+    response_type: "code",
+    override_default_response_type: true,
+    extras: {},
+  }
+);`
 
 export default function EmbeddedSignupPage() {
   return (
@@ -66,7 +63,7 @@ export default function EmbeddedSignupPage() {
         <SectionHeading
           eyebrow="Implementation note"
           title="Do not exchange the code too early"
-          subtitle="The frontend must wait for both Meta callbacks. The production component on this site already does that."
+          subtitle="The frontend must wait for both Meta callbacks. Use a new Embedded Signup v4 configuration; older v2/v3 configurations reached their retirement date in October 2026. The production component on this site waits for both Meta callbacks and uses the v4 launch format (empty extras)."
         />
         <div className="mx-auto mt-10 max-w-3xl">
           <CodeBlock title="embedded-signup.ts" code={sdkCode} />
