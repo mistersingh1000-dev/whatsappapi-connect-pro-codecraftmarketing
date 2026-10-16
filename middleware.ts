@@ -1,41 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { COOKIE_NAME, verifySession } from "@/lib/auth";
 
-export async function middleware(req: NextRequest) {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
-  const session = await verifySession(token);
-  const isApi = req.nextUrl.pathname.startsWith("/api/");
-
-  if (!session) {
-    if (isApi) {
-      return NextResponse.json(
-        { error: "not_authenticated", message: "Please log in." },
-        { status: 401 }
-      );
-    }
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    const res = NextResponse.redirect(url);
-    res.cookies.set(COOKIE_NAME, "", { path: "/", maxAge: 0 });
-    return res;
-  }
-
-  return NextResponse.next();
+// This retired deployment is intentionally unavailable after an IP/trademark
+// complaint. Preserve its source on the backup branch; do not serve the former
+// brand, landing pages, API routes or customer onboarding on this hostname.
+export function middleware(_req: NextRequest) {
+  return new NextResponse("This website has been retired. Please contact the site operator for assistance.", {
+    status: 410,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Robots-Tag": "noindex, nofollow, noarchive",
+    },
+  });
 }
 
-// IMPORTANT: never match "/api/:path*" broadly — that would block
-// /api/auth/signup and /api/auth/login, which must work without a session.
-// Also never match /api/webhooks/* — WhatsApp calls it with no cookie.
-export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/admin/:path*",
-    "/api/chat/:path*",
-    "/api/whatsapp/:path*",
-    "/api/admin/:path*",
-    "/api/dashboard/:path*",
-    "/api/payments/:path*",
-    "/api/orders",
-    "/api/embedded-signup/:path*",
-  ],
-};
+export const config = { matcher: "/:path*" };
