@@ -48,11 +48,10 @@ function SignupForm() {
       <div>
         <span className="eyebrow"><span className="h-1.5 w-1.5 rounded-full bg-emerald" /> 7-day free trial</span>
         <h1 className="mt-5 font-display text-4xl font-bold leading-tight sm:text-5xl">
-          Start sending on the <span className="gradient-text">official API</span> — free for 7 days
+          Start using the <span className="gradient-text">WhatsApp Business Platform</span>
         </h1>
         <p className="muted mt-5 max-w-md text-base leading-relaxed">
-          Create your account in seconds. Your trial unlocks the dashboard and API immediately and
-          auto-expires after 7 days — no charges, no surprises.
+          Create a Connect Pro account to use independent software operated by Codecraft Marketing. This does not create a Meta account or guarantee WhatsApp number approval.
         </p>
         <ul className="mt-8 grid max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
           {perks.map((p) => (
@@ -66,18 +65,18 @@ function SignupForm() {
 
       <div className="w-full max-w-md justify-self-center lg:justify-self-end">
         <form onSubmit={submit} className="card space-y-4 p-6 sm:p-8">
-          <h2 className="font-display text-xl font-semibold">Create your free account</h2>
+          <h2 className="font-display text-xl font-semibold">Create your Connect Pro account</h2>
           <div>
             <label className="mb-1.5 block text-sm font-medium">Full name</label>
-            <input className="field" value={form.name} onChange={update("name")} placeholder="Your name" />
+            <input className="field" autoComplete="name" value={form.name} onChange={update("name")} placeholder="Your name" />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Work email</label>
-            <input className="field" type="email" required value={form.email} onChange={update("email")} placeholder="you@company.com" />
+            <label className="mb-1.5 block text-sm font-medium">Email</label>
+            <input className="field" type="email" autoComplete="email" required value={form.email} onChange={update("email")} placeholder="you@company.com" />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Password</label>
-            <input className="field" type="password" required value={form.password} onChange={update("password")} placeholder="Create a password" />
+            <label className="mb-1.5 block text-sm font-medium">Create a Connect Pro password</label>
+            <input className="field" type="password" autoComplete="new-password" required minLength={8} value={form.password} onChange={update("password")} placeholder="At least 8 characters" />
           </div>
           {error && (
             <p className="rounded-xl border border-red-500/30 bg-red-500/[0.06] px-3 py-2.5 text-xs text-red-400">
@@ -92,6 +91,9 @@ function SignupForm() {
             <Link href="/login" className="text-emerald hover:underline">Log in</Link>
           </p>
         </form>
+        <p className="muted mt-4 text-center text-xs">
+          Use this form only for your Connect Pro account. Any Meta authorization is handled separately on Meta-hosted pages.
+        </p>
       </div>
     </section>
   );
