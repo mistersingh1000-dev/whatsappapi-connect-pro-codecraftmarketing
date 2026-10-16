@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { footerLinks, site } from "@/lib/site";
-import { Icon } from "./Icons";
+import { Icon } from "@/components/Icons";
 
 export default function Footer() {
   return (
@@ -8,9 +8,9 @@ export default function Footer() {
       <div className="container-px py-14">
         <div className="grid gap-10 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2.5">
+            <Link href="/" aria-label="WhatsApp Connect Pro home" className="flex items-center gap-2.5">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#2ee06f] to-[#075E54] shadow-glow">
-                <Icon.whatsapp className="h-5 w-5 text-white" />
+                <Icon.shield className="h-5 w-5 text-white" />
               </span>
               <span className="font-display text-[15px] font-bold">
                 WhatsApp <span className="gradient-text">Connect Pro</span>
@@ -48,7 +48,7 @@ export default function Footer() {
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t pt-6 text-sm muted sm:flex-row" style={{ borderColor: "var(--line)" }}>
           <p>© 2026 WhatsApp Connect Pro · Operated by Codecraft Marketing.</p>
           <p className="max-w-xl text-center text-xs sm:text-right">
-            WhatsApp Connect Pro is not Meta, WhatsApp, or an official Meta/WhatsApp product and is not endorsed by Meta Platforms, Inc. WhatsApp and Meta are trademarks of their respective owners.
+            WhatsApp Connect Pro is independent third-party software, not Meta, WhatsApp, or an official Meta/WhatsApp product, and is not endorsed by Meta Platforms, Inc. WhatsApp and Meta are trademarks of their respective owners.
           </p>
         </div>
       </div>
