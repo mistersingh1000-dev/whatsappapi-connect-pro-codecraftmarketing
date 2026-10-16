@@ -23,15 +23,13 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50">
       <div
-        className={`transition-all duration-300 ${
-          scrolled ? "glass shadow-card" : ""
-        }`}
+        className={`transition-all duration-300 ${scrolled ? "glass shadow-card" : ""}`}
         style={{ borderBottom: scrolled ? "1px solid var(--glass-line)" : "1px solid transparent" }}
       >
         <nav className="container-px flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
+          <Link href="/" aria-label="WhatsApp Connect Pro home" className="flex items-center gap-2.5">
             <span className="relative grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#2ee06f] to-[#075E54] text-ink shadow-glow">
-              <Icon.whatsapp className="h-5 w-5 text-white" />
+              <Icon.shield className="h-5 w-5 text-white" />
             </span>
             <span className="font-display text-[15px] font-bold leading-tight">
               WhatsApp <span className="gradient-text">Connect Pro</span>
@@ -45,9 +43,7 @@ export default function Navbar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
-                    active ? "text-emerald" : "muted hover:text-emerald"
-                  }`}
+                  className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${active ? "text-emerald" : "muted hover:text-emerald"}`}
                 >
                   {item.label}
                 </Link>

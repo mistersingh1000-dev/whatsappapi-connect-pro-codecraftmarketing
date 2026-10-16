@@ -32,10 +32,10 @@ function LoginInner() {
     <div className="w-full max-w-md">
       <div className="mb-6 text-center">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#2ee06f] to-[#075E54] shadow-glow">
-          <Icon.whatsapp className="h-6 w-6 text-white" />
+          <Icon.shield className="h-6 w-6 text-white" />
         </span>
         <h1 className="mt-4 font-display text-2xl font-bold">Welcome back</h1>
-        <p className="muted mt-2 text-sm">Sign in to your WhatsApp Connect Pro dashboard.</p>
+        <p className="muted mt-2 text-sm">Sign in to your independent WhatsApp Connect Pro dashboard, operated by Codecraft Marketing.</p>
       </div>
 
       {expired && (
@@ -47,14 +47,14 @@ function LoginInner() {
       <form onSubmit={submit} className="card space-y-4 p-6 sm:p-8">
         <div>
           <label className="mb-1.5 block text-sm font-medium">Email</label>
-          <input className="field" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
+          <input className="field" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
         </div>
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-3">
-            <label className="block text-sm font-medium">Password</label>
+            <label className="block text-sm font-medium">Connect Pro password</label>
             <Link href="/forgot-password" className="text-xs font-medium text-emerald hover:underline">Forgot password?</Link>
           </div>
-          <input className="field" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+          <input className="field" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your Connect Pro password" />
         </div>
         <button type="submit" className="btn-primary w-full">Sign in to dashboard</button>
         {msg && (
@@ -73,7 +73,7 @@ function LoginInner() {
       </form>
 
       <p className="muted mt-5 text-center text-xs">
-        No credit card required to create your trial account.
+        This password is only for your Connect Pro account. Never send passwords or OTPs to our support team. Meta sign-in happens only on Meta-hosted pages.
       </p>
     </div>
   );
