@@ -43,7 +43,7 @@ See `.env.example`. Key ones:
 | `RAZORPAY_KEY_SECRET` | Razorpay secret (server only) |
 | `NEXT_PUBLIC_SITE_URL` | Canonical URL for SEO |
 
-Until Meta keys are set, the Embedded Signup button runs in **demo mode**.
+Until `NEXT_PUBLIC_META_APP_ID` and `NEXT_PUBLIC_META_CONFIG_ID` are set, the Embedded Signup button stays disabled. Use a new Facebook Login for Business **WhatsApp Embedded Signup v4** configuration; Meta retired Embedded Signup v2/v3 in October 2026. Keep `META_APP_SECRET` and `WHATSAPP_WEBHOOK_TOKEN` server-side in Vercel.
 
 ## 🔌 Where to wire real logic
 
