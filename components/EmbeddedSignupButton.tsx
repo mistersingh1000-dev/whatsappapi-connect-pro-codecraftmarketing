@@ -146,10 +146,9 @@ export default function EmbeddedSignupButton({ onConnected }: { onConnected?: ()
         auth_type: "rerequest",
         response_type: "code",
         override_default_response_type: true,
-        extras: {
-          setup: {},
-          sessionInfoVersion: "3",
-        },
+        // Embedded Signup v4 reads products and permissions from the
+        // Facebook Login for Business configuration; keep extras empty.
+        extras: {},
       }
     );
   };
